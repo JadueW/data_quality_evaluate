@@ -10,6 +10,8 @@ from src.utils.importrhdutilities import load_file
 from src.utils.filesProcess import FileProcess
 from src.utils.hardware_resources import hardware_resources
 
+import math
+
 class DataParse(FileProcess):
     """
         1. 适配多种文件格式的数据加载类，如 .wl/ .edf/ .dat
@@ -232,10 +234,48 @@ class DataParse(FileProcess):
 
     def _load_chunked(self, is_parallel, max_workers):
         """
-        分块加载 数据大（单文件 > 500MB）
-        策略：分块读取单个文件
+        分块加载：单文件数据大
+        策略：阈值为磁盘容量的10%。根据文件大小 / (磁盘容量 * 0.1) 计算分块数
         """
-        pass
+        hardware = self.get_profile()
+        threshold_gb = hardware['disk_free_gb'] * 0.1  # 磁盘容量的10%
+
+        file_sizes_gb = [self.get_size_single_file(f) / 1024 for f in self.files]
+
+        for file_idx, file_path in enumerate(self.files):
+            file_size_gb = file_sizes_gb[file_idx]
+
+            ratio = file_size_gb / threshold_gb
+            num_chunks = math.ceil(ratio)  # 向上取整
+
+            print(f"文件 {os.path.basename(file_path)}: {file_size_gb:.2f}GB, 分成 {num_chunks} 块")
+
+            full_data = self.__parse_wl(os.path.basename(file_path))
+
+            data_array = full_data['data']
+            n_channels, n_samples = data_array.shape
+
+            # 计算每块应该有多少个样本
+            samples_per_chunk = n_samples // num_chunks
+
+            for chunk_idx in range(num_chunks):
+                start_idx = chunk_idx * samples_per_chunk
+                if chunk_idx == num_chunks - 1:
+                    end_idx = n_samples
+                else:
+                    end_idx = (chunk_idx + 1) * samples_per_chunk
+
+                chunk_data = full_data.copy()
+                chunk_data['data'] = data_array[:, start_idx:end_idx].copy()
+                chunk_data['chunk_info'] = {
+                    'chunk_idx': chunk_idx,
+                    'num_chunks': num_chunks,
+                    'start_sample': start_idx,
+                    'end_sample': end_idx,
+                    'total_samples': n_samples
+                }
+
+                yield chunk_data
 
 
 
@@ -251,5 +291,6 @@ if __name__ == '__main__':
 
     dataloader = dp.data_loader(strategy)
     datasets = next(dataloader)
-    print(len(datasets),type(datasets))
+
+    print(f"加载的数据量为: {len(datasets)}")
 
