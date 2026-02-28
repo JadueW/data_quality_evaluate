@@ -5,6 +5,7 @@ from typing import Generator, List, Dict, Any, Optional
 import numpy as np
 import pandas as pd
 from datetime import datetime
+import mne
 
 from src.utils.importrhdutilities import load_file
 from src.utils.filesProcess import FileProcess
@@ -39,10 +40,10 @@ class DataParse(FileProcess):
         with open(os.path.join(self.file_dir, mpping_file), 'r', encoding="utf-8") as f:
             content = f.read()
 
-        self.mapping = np.array([int(x.strip()) for x in content.replace('\n', ',').split(',') if x.strip()])
+        self.mapping = np.array([int(x.strip()) for x in content.replace('\n', ',').split(',') if x.strip()])[:3]
 
         # 缓存文件
-        self.files = [os.path.join(self.file_dir, f)for f in os.listdir(self.file_dir) if f.endswith((".wl", ".edf", ".dat"))]
+        self.files = [os.path.join(self.file_dir, f)for f in os.listdir(self.file_dir) if f.endswith(".wl") or f.endswith( ".edf") or f.endswith(".dat")]
 
         # 工具类加载
         self.hardware_resources = hardware_resources()
@@ -130,7 +131,6 @@ class DataParse(FileProcess):
 
     def __parse_wl(self,wl_file):
         data, data_present = load_file(os.path.join(self.file_dir,wl_file))
-        wl_files = [f for f in os.listdir(self.file_dir) if f.endswith(".wl")]
         datasets = {}
 
         datasets['data'] = data['amplifier_data']
@@ -138,7 +138,7 @@ class DataParse(FileProcess):
         datasets['fs'] = data['frequency_parameters']['amplifier_sample_rate']
         datasets['mapping'] = self.mapping
         datasets['ele_type'] = self.elec_type
-        datasets['subject_id'] = wl_files.index(wl_file)
+        datasets['subject_id'] = self.files.index(wl_file)
 
         date_str, time_str = wl_file.split(".")[0].split("_")[1:]
         dt = datetime.strptime(f"{date_str}_{time_str}", "%y%m%d_%H%M%S")
@@ -147,8 +147,23 @@ class DataParse(FileProcess):
         return datasets
 
     def __parse_edf(self,edf_file):
-        # TODO: parse edf file to custom format
-        pass
+        raw_edf = mne.io.read_raw_edf(os.path.join(self.file_dir,edf_file), preload=True)
+
+        datasets = {}
+
+        datasets['data'] = raw_edf.get_data()
+        datasets['impedence'] = self.impedence
+        datasets['fs'] = raw_edf.info['sfreq']
+        datasets['mapping'] = self.mapping
+        datasets['ele_type'] = self.elec_type
+        datasets['subject_id'] = self.files.index(edf_file)
+
+        date_str, time_str = edf_file.split(".")[0].split("_")[1:3]
+        dt = datetime.strptime(f"{date_str}_{time_str}", "%y%m%d_%H%M%S")
+        datasets['date'] = dt.strftime("%Y-%m-%d %H:%M:%S")
+
+        return datasets
+
 
     def data_loader(self, strategy=None):
         if strategy is None:
