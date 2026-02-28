@@ -81,7 +81,7 @@ class DataParse(FileProcess):
 
         # 初始化策略元字典
         strategy = {
-            "method": "direct",          # direct / chunked / merged / chunked_merged
+            "method": "full",          # full / chunked / merged
             "is_chunked": False,
             "is_parallel": False,
             "is_merged": False,
@@ -102,14 +102,12 @@ class DataParse(FileProcess):
             strategy['is_merged'] = True
 
         # 3. 确定加载方法
-        if strategy['is_chunked'] and strategy['is_merged']:
-            strategy['method'] = "chunked_merged"
-        elif strategy['is_chunked']:
+        if strategy['is_chunked']:
             strategy['method'] = "chunked"
         elif strategy['is_merged']:
             strategy['method'] = "merged"
         else:
-            strategy['method'] = "direct"
+            strategy['method'] = "full"
 
         # 4. 判断是否并行 (线程数多)
         # CPU核心数 >= 4
@@ -150,11 +148,108 @@ class DataParse(FileProcess):
         # TODO: parse edf file to custom format
         pass
 
+    def data_loader(self, strategy=None):
+        if strategy is None:
+            strategy = self.load_strategy()
+
+        method = strategy['method']
+        is_parallel = strategy['is_parallel']
+        max_workers = strategy.get('max_workers', 1)
+
+        if method == 'full':
+            return self._load_full(is_parallel, max_workers)
+        elif method == 'merged':
+            return self._load_merged(is_parallel, max_workers)
+        elif method == 'chunked':
+            return self._load_chunked(is_parallel, max_workers)
+        else:
+            raise ValueError(f"未知的加载方法: {method}")
+
+    def _load_full(self, is_parallel, max_workers):
+        """
+        全量加载：针对于数据小，文件少
+        策略：一次性加载所有文件，并一起返回
+        """
+        all_data = []
+
+        # 串行加载所有文件
+        if not is_parallel:
+            for file_path in self.files:
+                all_data.append(self.__parse_wl(os.path.basename(file_path)))
+        # 并行加载所有文件
+        else:
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures = {executor.submit(self.__parse_wl, os.path.basename(f)): f for f in self.files}
+                for future in as_completed(futures):
+                    try:
+                        all_data.append(future.result())
+                    except Exception as e:
+                        print(f"加载文件失败: {e}")
+
+        yield all_data
+
+    def _load_merged(self, is_parallel, max_workers):
+        """
+        合并加载:针对于数据小但文件多
+        策略：每批加载的数据量不超过空余磁盘容量的1%
+
+        测试结果：针对30MB单个文件，121个文件，不足以占满磁盘容量的1%；此处为了显示迭代器效果所以，选择阈值为磁盘容量额0.001
+        """
+        hardware = self.get_profile()
+        disk_limit_gb = hardware['disk_free_gb'] * 1e-3  # 磁盘容量0.001
+
+        # 计算每个文件大小
+        file_sizes_gb = [self.get_size_single_file(f) / 1024 for f in self.files]
+
+        # 分批：每批不超过 disk_limit_gb
+        batch_start = 0
+        while batch_start < len(self.files):
+            batch_size_gb = 0
+            batch_end = batch_start
+
+            while batch_end < len(self.files) and batch_size_gb < disk_limit_gb:
+                batch_size_gb += file_sizes_gb[batch_end]
+                batch_end += 1
+
+            batch_files = self.files[batch_start:batch_end]
+
+            if not is_parallel:
+                batch_data = [self.__parse_wl(os.path.basename(f)) for f in batch_files]
+            else:
+                with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                    futures = {executor.submit(self.__parse_wl, os.path.basename(f)): f for f in batch_files}
+                    batch_data = []
+                    for future in as_completed(futures):
+                        try:
+                            batch_data.append(future.result())
+                        except Exception as e:
+                            print(f"加载文件失败: {e}")
+
+            # 返回当前批次的数据
+            yield batch_data
+
+            batch_start = batch_end
+
+    def _load_chunked(self, is_parallel, max_workers):
+        """
+        块加载 数据大（单文件 > 500MB）
+        策略：分块读取单个文件
+        """
+        pass
+
+
+
 if __name__ == '__main__':
     file_dir = r'D:\dev\data_quality_evaluate\data\raw\对照组wl'
     dp = DataParse(file_dir)
 
-    print(dp.get_count_dir_files)
+    print(f"找到 {len(dp.files)} 个数据文件")
+    print(f"文件列表: {dp.files}")
 
     strategy = dp.load_strategy()
-    print(strategy)
+    print(f"策略: {strategy}")
+
+    dataloader = dp.data_loader(strategy)
+    datasets = next(dataloader)
+    print(len(datasets),type(datasets))
+
