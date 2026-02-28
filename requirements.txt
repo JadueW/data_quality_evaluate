@@ -2,3 +2,4 @@ matplotlib==3.10.8
 mne==1.11.0
 numpy==1.26.4
 pandas==2.3.3
+reportlab == 4.4.9
