@@ -232,7 +232,7 @@ class DataParse(FileProcess):
 
     def _load_chunked(self, is_parallel, max_workers):
         """
-        块加载 数据大（单文件 > 500MB）
+        分块加载 数据大（单文件 > 500MB）
         策略：分块读取单个文件
         """
         pass
