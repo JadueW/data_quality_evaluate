@@ -5,9 +5,8 @@ import warnings
 import numpy as np
 import mne
 
-from utilities.brpylib import NsxFile, brpylib_ver
-
-from utilities.importrhdutilities import load_file as data_reader
+from .brpylib import NsxFile, brpylib_ver
+from .importrhdutilities import load_file as data_reader
 
 
 class ECOGloader:
