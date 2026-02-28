@@ -1,6 +1,5 @@
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Generator, List, Dict, Any, Optional
 
 import numpy as np
 import pandas as pd
@@ -16,10 +15,11 @@ import math
 class DataParse(FileProcess):
     """
         1. 适配多种文件格式的数据加载类，如 .wl/ .edf/ .dat
-        2. 判断传入文件夹内的文件总数
-        3. 判断每个文件大小
+        2. 自动判断文件夹内的数据格式
+        3. 判断传入文件夹内的文件总数和单文件大小
+        4. 根据硬件资源选择最优加载策略
     """
-    def __init__(self,file_dir):
+    def __init__(self, file_dir):
         super().__init__(file_dir)
 
         self.file_dir = file_dir
@@ -27,32 +27,64 @@ class DataParse(FileProcess):
 
         # 获取impedence
         files = [f for f in os.listdir(self.file_dir)]
+        impedence_file = None
         for idx, file in enumerate(files):
             if file.__contains__("impedence"):
                 impedence_file = files[idx]
+                break
+        if impedence_file is None:
+            raise FileNotFoundError(f"未找到阻抗文件: 文件名需包含'impedence'")
         imp_data = pd.read_csv(os.path.join(self.file_dir, impedence_file))
         self.impedence = np.array(imp_data['Impedance Magnitude at 1000 Hz (ohms)'])
 
         # 获取mapping
+        mapping_file = None
         for idx, file in enumerate(files):
             if file.__contains__(self.elec_type):
-                mpping_file = files[idx]
-        with open(os.path.join(self.file_dir, mpping_file), 'r', encoding="utf-8") as f:
+                mapping_file = files[idx]
+                break
+        if mapping_file is None:
+            raise FileNotFoundError(f"未找到映射文件: 文件名需包含'{self.elec_type}'")
+        with open(os.path.join(self.file_dir, mapping_file), 'r', encoding="utf-8") as f:
             content = f.read()
 
         self.mapping = np.array([int(x.strip()) for x in content.replace('\n', ',').split(',') if x.strip()])[:3]
 
-        # 缓存文件
-        self.files = [os.path.join(self.file_dir, f)for f in os.listdir(self.file_dir) if f.endswith(".wl") or f.endswith( ".edf") or f.endswith(".dat")]
+        # 缓存数据文件并自动判断格式
+        self.files = [os.path.join(self.file_dir, f) for f in os.listdir(self.file_dir)
+                      if f.endswith(".wl") or f.endswith(".edf") or f.endswith(".dat")]
+        self.file_format = self._detect_file_format()
 
         # 工具类加载
         self.hardware_resources = hardware_resources()
+
+    def _detect_file_format(self):
+        """
+        自动检测文件夹内的数据文件格式
+        """
+        if not self.files:
+            raise ValueError("文件夹内没有找到 .wl / .edf / .dat 格式的数据文件")
+
+        format_count = {"wl": 0, "edf": 0, "dat": 0}
+        for f in self.files:
+            if f.endswith(".wl"):
+                format_count["wl"] += 1
+            elif f.endswith(".edf"):
+                format_count["edf"] += 1
+            elif f.endswith(".dat"):
+                format_count["dat"] += 1
+        max_format = max(format_count, key=format_count.get)
+        if format_count[max_format] == 0:
+            raise ValueError("无法确定文件格式")
+
+        print(f"检测到数据格式: {max_format.upper()}, 文件数量: {format_count[max_format]}")
+        return max_format
 
     @property
     def get_count_dir_files(self):
         return self.count_dir_files()
 
-    def get_size_single_file(self,raw_file):
+    def get_size_single_file(self, raw_file):
         return self.size_single_file(raw_file)
 
     def get_profile(self):
@@ -129,8 +161,25 @@ class DataParse(FileProcess):
 
         return strategy
 
-    def __parse_wl(self,wl_file):
-        data, data_present = load_file(os.path.join(self.file_dir,wl_file))
+    def _parse_file(self, file_path):
+        """
+        统一文件解析接口，根据文件格式自动选择解析方法
+        返回标准 raw_data接口字典
+        """
+        file_ext = os.path.splitext(file_path)[1].lower()
+
+        if file_ext == '.wl':
+            return self.__parse_wl(file_path)
+        elif file_ext == '.edf':
+            return self.__parse_edf(file_path)
+        elif file_ext == '.dat':
+            return self.__parse_dat(file_path)
+        else:
+            raise ValueError(f"不支持的文件格式: {file_ext}")
+
+    def __parse_wl(self, wl_file):
+        """解析 .wl 格式文件"""
+        data, data_present = load_file(wl_file)
         datasets = {}
 
         datasets['data'] = data['amplifier_data']
@@ -140,17 +189,18 @@ class DataParse(FileProcess):
         datasets['ele_type'] = self.elec_type
         datasets['subject_id'] = self.files.index(wl_file)
 
-        date_str, time_str = wl_file.split(".")[0].split("_")[1:]
+        basename = os.path.basename(wl_file)
+        date_str, time_str = basename.split(".")[0].split("_")[1:]
         dt = datetime.strptime(f"{date_str}_{time_str}", "%y%m%d_%H%M%S")
         datasets['date'] = dt.strftime("%Y-%m-%d %H:%M:%S")
 
         return datasets
 
-    def __parse_edf(self,edf_file):
-        raw_edf = mne.io.read_raw_edf(os.path.join(self.file_dir,edf_file), preload=True)
+    def __parse_edf(self, edf_file):
+        """解析 .edf 格式文件"""
+        raw_edf = mne.io.read_raw_edf(edf_file, preload=True, verbose=False)
 
         datasets = {}
-
         datasets['data'] = raw_edf.get_data()
         datasets['impedence'] = self.impedence
         datasets['fs'] = raw_edf.info['sfreq']
@@ -158,11 +208,23 @@ class DataParse(FileProcess):
         datasets['ele_type'] = self.elec_type
         datasets['subject_id'] = self.files.index(edf_file)
 
-        date_str, time_str = edf_file.split(".")[0].split("_")[1:3]
-        dt = datetime.strptime(f"{date_str}_{time_str}", "%y%m%d_%H%M%S")
-        datasets['date'] = dt.strftime("%Y-%m-%d %H:%M:%S")
+        basename = os.path.basename(edf_file)
+        # EDF文件命名格式: data_YYMMDD_HHMMSS_X.edf
+        parts = basename.split(".")[0].split("_")
+        if len(parts) >= 3:
+            date_str = parts[1]
+            time_str = parts[2]
+            dt = datetime.strptime(f"{date_str}_{time_str}", "%y%m%d_%H%M%S")
+            datasets['date'] = dt.strftime("%Y-%m-%d %H:%M:%S")
+        else:
+            # 如果无法解析时间，使用文件修改时间
+            datasets['date'] = datetime.fromtimestamp(os.path.getmtime(edf_file)).strftime("%Y-%m-%d %H:%M:%S")
 
         return datasets
+
+    def __parse_dat(self, dat_file):
+        #TODO: 解析 .dat待实现
+        pass
 
 
     def data_loader(self, strategy=None):
@@ -192,16 +254,16 @@ class DataParse(FileProcess):
         # 串行加载所有文件
         if not is_parallel:
             for file_path in self.files:
-                all_data.append(self.__parse_wl(os.path.basename(file_path)))
+                all_data.append(self._parse_file(file_path))
         # 并行加载所有文件
         else:
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                futures = {executor.submit(self.__parse_wl, os.path.basename(f)): f for f in self.files}
+                futures = {executor.submit(self._parse_file, f): f for f in self.files}
                 for future in as_completed(futures):
                     try:
                         all_data.append(future.result())
                     except Exception as e:
-                        print(f"加载文件失败: {e}")
+                        print(f"加载文件失败: {futures[future]}, 错误: {e}")
 
         yield all_data
 
@@ -231,16 +293,16 @@ class DataParse(FileProcess):
             batch_files = self.files[batch_start:batch_end]
 
             if not is_parallel:
-                batch_data = [self.__parse_wl(os.path.basename(f)) for f in batch_files]
+                batch_data = [self._parse_file(f) for f in batch_files]
             else:
                 with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                    futures = {executor.submit(self.__parse_wl, os.path.basename(f)): f for f in batch_files}
+                    futures = {executor.submit(self._parse_file, f): f for f in batch_files}
                     batch_data = []
                     for future in as_completed(futures):
                         try:
                             batch_data.append(future.result())
                         except Exception as e:
-                            print(f"加载文件失败: {e}")
+                            print(f"加载文件失败: {futures[future]}, 错误: {e}")
 
             # 返回当前批次的数据
             yield batch_data
@@ -265,7 +327,7 @@ class DataParse(FileProcess):
 
             print(f"文件 {os.path.basename(file_path)}: {file_size_gb:.2f}GB, 分成 {num_chunks} 块")
 
-            full_data = self.__parse_wl(os.path.basename(file_path))
+            full_data = self._parse_file(file_path)
 
             data_array = full_data['data']
             n_channels, n_samples = data_array.shape
@@ -293,13 +355,14 @@ class DataParse(FileProcess):
                 yield chunk_data
 
 
-
 if __name__ == '__main__':
-    file_dir = r'D:\dev\data_quality_evaluate\data\raw\对照组wl'
+    # 测试 WL 格式
+    file_dir = r'D:\dev\data_quality_evaluate\data\raw\edf'
     dp = DataParse(file_dir)
 
     print(f"找到 {len(dp.files)} 个数据文件")
-    print(f"文件列表: {dp.files}")
+    print(f"文件格式: {dp.file_format}")
+    print(f"电极类型: {dp.elec_type}")
 
     strategy = dp.load_strategy()
     print(f"策略: {strategy}")
@@ -308,4 +371,3 @@ if __name__ == '__main__':
     datasets = next(dataloader)
 
     print(f"加载的数据量为: {len(datasets)}")
-
