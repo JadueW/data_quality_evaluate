@@ -5,17 +5,19 @@ import pandas as pd
 from datetime import datetime
 
 from src.utils.importrhdutilities import load_file
+from src.utils.filesProcess import FileProcess
+from src.utils.hardware_resources import hardware_resources
 
 
-class data_parse:
+class data_parse(FileProcess):
     """
         1. 适配多种文件格式的数据加载类，如 .wl/ .edf/ .dat
         2. 判断传入文件夹内的文件总数
         3. 判断每个文件大小
     """
-
-
     def __init__(self,file_dir):
+        super(FileProcess).__init__(file_dir=file_dir)
+
         self.file_dir = file_dir
         self.elec_type = "PSE-4A" if file_dir.__contains__("对照组") else "μCortex0-07"
 
@@ -36,9 +38,18 @@ class data_parse:
 
         self.mapping = np.array([int(x.strip()) for x in content.replace('\n', ',').split(',') if x.strip()])
 
+        # 工具类加载
+        self.hardware_resources = hardware_resources()
+
+    @property
+    def get_count_dir_files(self):
+        return self.get_count_dir_files()
+
+    def get_size_single_file(self,raw_file):
+        return self.size_single_file(raw_file)
 
 
-    def parse_wl(self,wl_file):
+    def __parse_wl(self,wl_file):
         data, data_present = load_file(os.path.join(self.file_dir,wl_file))
         wl_files = [f for f in os.listdir(self.file_dir) if f.endswith(".wl")]
         datasets = {}
@@ -56,6 +67,6 @@ class data_parse:
 
         return datasets
 
-    def parse_edf(self,edf_file):
+    def __parse_edf(self,edf_file):
         # TODO: parse edf file to custom format
         pass
