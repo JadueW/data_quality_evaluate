@@ -178,7 +178,7 @@ class DataParse(FileProcess):
             raise ValueError(f"不支持的文件格式: {file_ext}")
 
     def __parse_wl(self, wl_file):
-        """解析 .wl 格式文件"""
+        """解析 .对照组wl 格式文件"""
         data, data_present = load_file(wl_file)
         datasets = {}
 
@@ -209,16 +209,9 @@ class DataParse(FileProcess):
         datasets['subject_id'] = self.files.index(edf_file)
 
         basename = os.path.basename(edf_file)
-        # EDF文件命名格式: data_YYMMDD_HHMMSS_X.edf
-        parts = basename.split(".")[0].split("_")
-        if len(parts) >= 3:
-            date_str = parts[1]
-            time_str = parts[2]
-            dt = datetime.strptime(f"{date_str}_{time_str}", "%y%m%d_%H%M%S")
-            datasets['date'] = dt.strftime("%Y-%m-%d %H:%M:%S")
-        else:
-            # 如果无法解析时间，使用文件修改时间
-            datasets['date'] = datetime.fromtimestamp(os.path.getmtime(edf_file)).strftime("%Y-%m-%d %H:%M:%S")
+        date_str, time_str = basename.split(".")[0].split("_")[1:3]
+        dt = datetime.strptime(f"{date_str}_{time_str}", "%Y%m%d_%H%M%S")
+        datasets['date'] = dt.strftime("%Y-%m-%d %H:%M:%S")
 
         return datasets
 
@@ -357,7 +350,7 @@ class DataParse(FileProcess):
 
 if __name__ == '__main__':
     # 测试 WL 格式
-    file_dir = r'D:\dev\data_quality_evaluate\data\raw\edf'
+    file_dir = r'D:\code\data_quality_evaluate\data\raw\对照组edf'
     dp = DataParse(file_dir)
 
     print(f"找到 {len(dp.files)} 个数据文件")
@@ -370,4 +363,6 @@ if __name__ == '__main__':
     dataloader = dp.data_loader(strategy)
     datasets = next(dataloader)
 
-    print(f"加载的数据量为: {len(datasets)}")
+    print(f"加载的数据量为: {len(datasets)}, 数据类型为:{type(datasets)}")
+
+    print(datasets[0].keys())
