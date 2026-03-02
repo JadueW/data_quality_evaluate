@@ -11,6 +11,9 @@
         impedence_range(min,max,avg)
 """
 
+import numpy as np
+from tdigest import TDigest
+
 class ExtractReportFeatures:
     def __init__(self,all_group_statistics_data,timepoints,fs):
         """
@@ -43,7 +46,6 @@ class ExtractReportFeatures:
                 "95%": 0.0,
                 "99": 0.0
             },
-
             "std":{
                 "min": 0.0,
                 "max": 0.0,
@@ -55,7 +57,6 @@ class ExtractReportFeatures:
                 "95%": 0.0,
                 "99": 0.0
             },
-
             "mean":{
                 "min": 0.0,
                 "max": 0.0,
@@ -102,3 +103,6 @@ class ExtractReportFeatures:
         valid_length = valid_win * self.timepoints / self.fs  # 单位：时间 s
 
         return total_ch, bad_ch, bad_ratio, valid_length
+
+    def _compute_amp_statistics(self):
+        all_win_tdigest = self.all_group_statistics_data["all_win_tdigest"]
