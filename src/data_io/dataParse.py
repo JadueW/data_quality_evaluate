@@ -323,7 +323,7 @@ class DataParse(FileProcess):
                 if key != 'data':
                     merged_batch[key] = batch_data_list[0][key]
 
-
+            print(f"当前批次数据量{len(batch_data_list)}")
             yield merged_batch
 
             batch_start = batch_end
