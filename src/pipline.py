@@ -4,13 +4,15 @@
 # software: PyCharm
 from src.data_io.dataParse import DataParse
 from src.preprocessing.preprocessor import Preprocessor
-from src.metrics.statistics import Statistics, StatisticsAggregator
+from src.metrics.statistics import Statistics
+from src.metrics.statisticsAggregator import StatisticsAggregator
 
 
 if __name__ == '__main__':
 
     data_dir = '../data/raw/小黑20260114第二只001对照组'
     data = DataParse(data_dir)
+    delta = 100
 
     # 1. 计算加载策略
     strategy = data.load_strategy()
@@ -25,6 +27,7 @@ if __name__ == '__main__':
     # 用于存储所有窗口的统计数据
     all_statistics = {}
     win_counter = 0
+    total_windows = 0
 
     # 4. 迭代处理 预处理和统计分析
     while datasets := next(dataloader):
@@ -33,16 +36,6 @@ if __name__ == '__main__':
         ds = Preprocessor(datasets)
 
         # TODO: 完成预处理后续模块
-        # 预处理步骤：group -> notch_filter -> pass_filter -> bad_check -> re_reference
-
-        # 示例：假设预处理完成后得到 preprocessed_data_dict
-        # preprocessed_data_dict = {
-        #     0: {
-        #         'win_check_mask': True,
-        #         'ch_check_mask': [True, False, False, True],
-        #         'processed_data': processed_data
-        #     }
-        # }
         preprocessed_data_dict = {}
 
         # 4.2 对于每个窗口的每个组进行统计
@@ -56,6 +49,8 @@ if __name__ == '__main__':
             all_statistics[win_counter] = win_group_statistics
             win_counter += 1
 
+    all_group_statistics_data = aggregator.aggregation_all_statistics_data(all_statistics)
 
+    # TODO:5. 计算指定指标，形成report_data数据接口
 
 
