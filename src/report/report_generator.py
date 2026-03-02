@@ -8,10 +8,10 @@ from reportlab.platypus import Paragraph, Spacer, Table, TableStyle
 # ── 默认占位数据（接口数据未传入时使用）────────────────────────────
 _DEFAULTS = {
     # 结论
-    'effective_ratio':   'xx',
-    'powerline_freqs':   '50Hz, 100Hz, ...',
-    'bad_count':         'xx',
-    'total_channels':    'XX',
+    'valid_length':   'xx',
+    'line_noise':   '50Hz, 100Hz, ...',
+    'bad_ch':         'xx',
+    'total_ch':    'XX',
     'bad_ratio':         'xx',
     'amp_range':         '[-500,500]',
     'amp_p1_p99':        '',
@@ -70,13 +70,15 @@ _DEFAULTS = {
 }
 
 class PDFReportGenerator:
-    def __init__(self, output_path="report.pdf"):
+    def __init__(self, output_dir, pdf_name="data_quality_report.pdf"):
+        import os
         from reportlab.platypus import SimpleDocTemplate
         from reportlab.lib.pagesizes import A4
-        self.output_path = output_path
+        self.output_dir = output_dir
+        self.output_path = os.path.join(output_dir, pdf_name)
         self.story = []
         self.doc = SimpleDocTemplate(
-            output_path,
+            self.output_path,
             pagesize=A4,
             rightMargin=15*mm,
             leftMargin=15*mm,
@@ -191,9 +193,9 @@ class PDFReportGenerator:
         g = lambda k: self._get(r, k)
         self.story.append(Paragraph("结论<font size=10><super>1</super></font>：", self.styles['Section']))
         lines = [
-            "信号有效时长<font size=8><super>2</super></font>：---s（" + g('effective_ratio') + "%）；",
-            "工频噪声：[" + g('powerline_freqs') + "]；",
-            "坏道数/总数<font size=8><super>3</super></font>（百分比）：" + str(g('bad_count')) + "/" + str(g('total_channels')) + "（" + str(g('bad_ratio')) + "%）；",
+            "信号有效时长<font size=8><super>2</super></font>：---s（" + g('valid_length') + "%）；",
+            "工频噪声：[" + g('line_noise') + "]；",
+            "坏道数/总数<font size=8><super>3</super></font>（百分比）：" + str(g('bad_ch')) + "/" + str(g('total_ch')) + "（" + str(g('bad_ratio')) + "%）；",
             "幅度分布范围<font size=8><super>4</super></font>：" + g('amp_range') + "uV；1%-99%区间范围：<u>" + g('amp_p1_p99') + "uV</u>；5%-95%区间范围：<u>" + g('amp_p5_p95') + "uV</u>；",
             "标准差分布范围：" + g('std_range') + "uV；1%-99%区间范围：<u>" + g('std_p1_p99') + "uV</u>；5%-95%区间范围：<u>" + g('std_p5_p95') + "uV</u>；",
             "信噪比分布范围<font size=8><super>5</super></font>：" + g('snr_range') + "dB；",
@@ -209,8 +211,9 @@ class PDFReportGenerator:
         image_source: 外部传入的电极图，支持：
           - 文件路径字符串，如 '/path/to/electrode.png'
           - BytesIO 对象（matplotlib savefig 输出）
-          - None → 内部用 bad_channels 自动生成占位图
+          - None → 内部用 bad_channels 自动生成占位图，并保存至 output_dir/elec_mapping.png
         """
+        import os
         from reportlab.platypus import Image
         from reportlab.platypus.flowables import HRFlowable
 
@@ -234,6 +237,8 @@ class PDFReportGenerator:
                         edgecolors='gray' if is_bad else 'darkgreen',
                         linewidth=0.8,
                     )
+            save_path = os.path.join(self.output_dir, "elec_mapping.png")
+            plt.savefig(save_path, format='png', bbox_inches='tight', dpi=160, transparent=True)
             buf = BytesIO()
             plt.savefig(buf, format='png', bbox_inches='tight', dpi=160, transparent=True)
             buf.seek(0)
@@ -363,12 +368,14 @@ class PDFReportGenerator:
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     # 趋势图（占位随机波形，接口数据传入时替换）
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    def _make_trend_elements(self, title, image_source=None, n_channels=128, duration_min=11.22):
+    def _make_trend_elements(self, title, image_source=None, n_channels=128, duration_min=11.22, png_name=None):
         """
         生成趋势图 flowable 列表（不直接写入 story）。
         image_source: 外部传入的趋势图，支持文件路径字符串或 BytesIO；
-                      为 None 时内部生成随机占位波形。
+                      为 None 时内部生成随机占位波形，并保存至 output_dir/png_name。
+        png_name: 内部生成时保存的 PNG 文件名，如 'signal_trends_mean.png'。
         """
+        import os
         from reportlab.platypus import Image
 
         if image_source is not None:
@@ -385,6 +392,9 @@ class PDFReportGenerator:
             ax.set_xlabel("t/min")
             ax.set_ylabel("ch")
             ax.grid(True, alpha=0.25, linestyle='--')
+            if png_name:
+                save_path = os.path.join(self.output_dir, png_name)
+                plt.savefig(save_path, format='png', bbox_inches='tight', dpi=150)
             buf = BytesIO()
             plt.savefig(buf, format='png', bbox_inches='tight', dpi=150)
             buf.seek(0)
@@ -396,9 +406,9 @@ class PDFReportGenerator:
             Spacer(1, 6*mm),
         ]
 
-    def add_trend_plot(self, title, image_source=None, n_channels=128, duration_min=11.22):
+    def add_trend_plot(self, title, image_source=None, n_channels=128, duration_min=11.22, png_name=None):
         """公开接口：趋势图直接追加到 story（用于趋势图2）"""
-        self.story.extend(self._make_trend_elements(title, image_source, n_channels, duration_min))
+        self.story.extend(self._make_trend_elements(title, image_source, n_channels, duration_min, png_name))
 
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     # 通用表格
@@ -464,6 +474,7 @@ class PDFReportGenerator:
             self._make_trend_elements(
                 "信号变化趋势 1（均值）<font size=10><super>8</super></font>",
                 image_source=r.get('trend1_image'),
+                png_name="signal_trends_mean.png",
             ) + [
                 Spacer(1, 3*mm),
                 HRFlowable(width=6*cm, thickness=0.5, color=colors.black, hAlign='LEFT'),
@@ -474,13 +485,16 @@ class PDFReportGenerator:
         self.story.append(PageBreak())
 
         # ── 第4页 ────────────────────────────────────────────
-        self.add_trend_plot("信号变化趋势 2（标准差）", image_source=r.get('trend2_image'))
+        self.add_trend_plot("信号变化趋势 2（标准差）", image_source=r.get('trend2_image'), png_name="signal_trends_std.png")
 
         self.doc.build(self.story)
         print("报告已生成：" + self.output_path)
 
 if __name__ == "__main__":
     # ── 测试：用占位符生成 ────────────────────────────────────
-    gen = PDFReportGenerator("质量分析报告.pdf")
+    import os
+    output_dir = "../../results/小黑20260114第二只001对照组"
+    os.makedirs(output_dir, exist_ok=True)
+    gen = PDFReportGenerator(output_dir)
     gen.build_report()
     
