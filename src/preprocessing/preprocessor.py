@@ -4,13 +4,17 @@
 # software: PyCharm
 
 import numpy as np
-import mne
+from scipy.signal import iirnotch, filtfilt
+from mne.filter import filter_data
 
 
 class Preprocessor:
     def __init__(self, raw_data):
         self.raw_data = raw_data
-        pass
+        self.fs = self.raw_data.get("fs", None)
+        if not self.fs:
+            raise AssertionError("未获取到采样频率fs")
+        self.ch_check_mask = None
 
     def group(self, **kwargs):
         """
@@ -33,10 +37,10 @@ class Preprocessor:
             grouped_data: np.ndarray
         """
         ele_type = self.raw_data.get("ele_type", "")
-        data = self.raw_data.get("raw_data", None)
+        data = self.raw_data.get("data", None)
         # 拿到映射, 这个映射是电极的物理映射
         mapping = self.raw_data.get("mapping", None)
-        assert not mapping, "电极物理映射必须存在"
+        assert not np.all(mapping), "电极物理映射必须存在"
 
         total_chs = data.shape[0]
         grouped_data = []
@@ -60,7 +64,7 @@ class Preprocessor:
             # 如果是华科电极，需要先确定转接器的映射
             connector_mapping = kwargs.get("connector_mapping", None)
             if not connector_mapping:
-                connector_mapping = np.arange(128).reshape((12, 8))
+                connector_mapping = np.arange(128).reshape((16, 8))
 
             # 先根据转接器调整顺序
             data = self.__re_mapping(data, connector_mapping)
@@ -74,7 +78,7 @@ class Preprocessor:
                 pse_order = [[i * pse_ch_num + 1, i * pse_ch_num + pse_ch_num + 1] for i in range(pse_num)]
 
             pse_order = np.array(pse_order)
-            if kwargs.get("index_method"):
+            if kwargs.get("index_method", 1):
                 pse_order = pse_order - 1
 
             # 再依次选取各组数据
@@ -96,21 +100,106 @@ class Preprocessor:
         data = data[new_mapping, ...]
         return data
 
+    def line_noise_detect(self):
+        """
+        检测线噪声，频率分辨率为1Hz
+        """
+        pass
+
     def notch_filter(self, data):
-        pass
+        '''
+        此处方法与静息态分析代码中的方法一致，参数不可调
+        from mne.filter import notch_filter
+        data = data * 1.0
+        fs = config['fs']
+        f0_list = config['notch_freqs_list']
+        notch_width = config['notch_width']
+        notch_method = config['notch_method']
+        notched_data = data
+        for f in f0_list:
+           notched_data = notch_filter(notched_data, fs, f, notch_widths=notch_width, method=notch_method)
+        return notched_data
+        '''
 
-    def pass_filter(self):
-        pass
+        data = data * 1.0
 
-    def bad_check(self):
-        pass
+        Q = 30
+        notch_freqs = [50, 100, 150, 200]
+
+        for freq in notch_freqs:
+            b, a = iirnotch(freq, Q=Q, fs=self.fs)
+            data = filtfilt(b, a, data, axis=-1)
+        return data
+
+    def pass_filter(self, data):
+        """
+        此处方法与静息态分析代码中的方法一致, 参数不可调
+        """
+        l_freq = 1
+        h_freq = 200
+        l_trans_bandwidth = 1
+        h_trans_bandwidth = 10
+        method = "iir"
+
+        filtered_data = filter_data(data, sfreq=self.fs, l_freq=l_freq, h_freq=h_freq,
+                                    l_trans_bandwidth=l_trans_bandwidth, h_trans_bandwidth=h_trans_bandwidth,
+                                    method=method)
+
+        return filtered_data
+
+    def bad_check(self, data):
+        """
+        此处方法与静息态分析代码中的方法一致, 参数不可调
+        return:
+            is_win_good: bool 当前窗口是否为坏窗
+            ch_check_mask: List[bool] 当前窗口所有的通道的检查结果
+        """
+        total_ch_num = data.shape[0]
+        self.ch_check_mask = np.array([True for _ in range(total_ch_num)])
+
+        std_signal = np.std(data, axis=-1, ddof=1)
+        bad_channel_mask = std_signal > 100
+        if np.sum(bad_channel_mask) / total_ch_num > 0.3:
+            is_win_good = False
+            self.ch_check_mask = ~self.ch_check_mask
+        else:
+            self.ch_check_mask[std_signal > 100] = False
+            is_win_good = True
+        return is_win_good, self.ch_check_mask
 
     def resample(self):
+
         pass
 
-    def re_reference(self):
-        pass
+    def re_reference(self, data):
+        """
+        此处方法与静息态分析代码中的方法一致, 参数不可调
+        使用的坏道去除后的所有通道平均
+        """
+        cared_data = data[self.ch_check_mask, ...]
+        mean_signal = np.mean(cared_data, axis=0)
+        return cared_data - mean_signal
 
 
 if __name__ == '__main__':
+    uCortex_fake_data = {
+        "data": np.random.randn(256, 10000),
+        "fs": 2000,
+        "mapping": np.arange(128).reshape((16, 8)),
+        "ele_type": "uCortex0-7",
+        "subject_id": "",
+        "date": "",
+
+    }
+    pse_fake_data = {
+        "data": np.random.randn(128, 10000),
+        "fs": 2000,
+        "mapping": np.arange(4).reshape((1, -1)),
+        "ele_type": "PSE-4A",
+        "subject_id": "",
+        "date": "",
+
+    }
+    pp = Preprocessor(pse_fake_data)
+    pp.group(pse_num=2, pse_order="order")
     print("hi")
