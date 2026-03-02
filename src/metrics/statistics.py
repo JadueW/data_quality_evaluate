@@ -36,6 +36,8 @@ class Statistics:
                 "win_tdigest": [TDigest(delta=self.delta) for _ in range(n_channels)],
             }
 
+            # TODO: SNR
+
             for ch_idx in range(n_channels):
                 ch_data = group_data['processed_data'][ch_idx]
                 statistics_win_data['win_tdigest'][ch_idx].batch_update(ch_data)
