@@ -9,6 +9,7 @@ from src.preprocessing.preprocessor import Preprocessor
 from src.metrics.statistics import Statistics
 from src.metrics.statisticsAggregator import StatisticsAggregator
 
+from src.report.extractReportFeatures import ExtractReportFeatures
 
 if __name__ == '__main__':
 
@@ -34,8 +35,13 @@ if __name__ == '__main__':
     win_counter = 0
     total_windows = 0
 
+    timepoints = 0
+    fs = 0
+
     # 4. 迭代处理 预处理和统计分析
     while datasets := next(dataloader):
+        timepoints = datasets['data'].shape[1]
+        fs = datasets['fs']
 
         # 4.1 获取数据后进行预处理
         ds = Preprocessor(datasets)
@@ -57,5 +63,5 @@ if __name__ == '__main__':
     all_group_statistics_data = aggregator.aggregation_all_statistics_data(all_statistics)
 
     # TODO:5. 计算指定指标，形成report_data数据接口
-
+    erf = ExtractReportFeatures(all_group_statistics_data,timepoints,fs)
 

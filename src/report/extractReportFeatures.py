@@ -12,19 +12,26 @@
 """
 
 class ExtractReportFeatures:
-    def __init__(self,all_group_statistics_data):
+    def __init__(self,all_group_statistics_data,timepoints,fs):
+        """
+
+        :param all_group_statistics_data:
+        :param timepoints: 一个窗口的时间点数
+        :param fs: 采样率
+        """
+        self.timepoints = timepoints
+        self.fs = fs
         self.all_group_statistics_data = all_group_statistics_data
 
-        # 获取电极拓扑的分布情况（不同channel的True，False）
-        self.all_ch_check_mask = self.all_group_statistics_data["all_ch_check_mask"]
+        total_ch, bad_ch, bad_ratio, valid_length = self._compute_win_ch()
 
         # 需要计算的结果
         self.report_data = {
-            "valid_length": 0.0,
+            "valid_length": valid_length,
             "line_noise": 0.0,
-            "bad_ch": 0,
-            "total_ch": 0,
-            "bad_ratio": 0.0,
+            "bad_ch": bad_ch,
+            "total_ch": total_ch,
+            "bad_ratio": bad_ratio,
             "amp":{
                 "min": 0.0,
                 "max": 0.0,
@@ -74,3 +81,24 @@ class ExtractReportFeatures:
             }
         }
 
+    def _compute_win_ch(self):
+        # 获取电极拓扑的分布情况（不同channel的True，False）
+        self.all_ch_check_mask = self.all_group_statistics_data["all_ch_check_mask"]
+        total_ch, bad_ch, bad_ratio = 0, 0, 0.0
+        for ch in self.all_ch_check_mask:
+            total_ch += 1
+            if not ch:
+                bad_ch += 1
+            else:
+                continue
+        bad_ratio = bad_ch / total_ch
+
+        # 获取有效窗口数量
+        self.all_win_check_mask = self.all_group_statistics_data['all_win_check_mask']
+        valid_win = 0
+        for ch in self.all_win_check_mask:
+            if ch:
+                valid_win += 1
+        valid_length = valid_win * self.timepoints / self.fs  # 单位：时间 s
+
+        return total_ch, bad_ch, bad_ratio, valid_length
