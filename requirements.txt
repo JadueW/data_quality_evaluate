@@ -2,4 +2,6 @@ matplotlib==3.10.8
 mne==1.11.0
 numpy==1.26.4
 pandas==2.3.3
-reportlab == 4.4.9
+psutil==7.2.2
+reportlab==4.4.9
+tdigest-rs==0.1.0
