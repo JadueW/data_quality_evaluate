@@ -1,5 +1,6 @@
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import re
 
 import numpy as np
 import pandas as pd
@@ -25,6 +26,32 @@ class DataParse(FileProcess):
         self.file_dir = file_dir
         self.elec_type = "PSE-4A" if file_dir.__contains__("对照组") else "μCortex0-07"
 
+        result = self._parse_folder_name()
+        self.mapping = result["mapping"]
+        self.impedence = result["impedence"]
+        self.subject_id = result["subject_id"]
+        self.date = result["date"]
+
+        # 缓存数据文件并自动判断格式
+        self.files = [os.path.join(self.file_dir, f) for f in os.listdir(self.file_dir)
+                      if f.endswith(".wl") or f.endswith(".edf") or f.endswith(".dat")]
+        self.file_format = self._detect_file_format()
+
+        # 工具类加载
+        self.hardware_resources = hardware_resources()
+
+    def _parse_folder_name(self):
+        """从文件夹名提取日期，subject_id，mapping和impedence"""
+        result = {}
+
+        # 提取8位日期
+        date_match = re.search(r'(\d{8})', self.file_dir)
+        result['date'] = date_match.group(1) if date_match else None
+
+        # 提取subject_id
+        subject_match = re.search(r'(第[一二三四五六七八九十百千万]+只\d{3})', self.file_dir)
+        result['subject_id'] = subject_match.group(1) if subject_match else None
+
         # 获取impedence
         files = [f for f in os.listdir(self.file_dir)]
         impedence_file = None
@@ -35,7 +62,7 @@ class DataParse(FileProcess):
         if impedence_file is None:
             raise FileNotFoundError(f"未找到阻抗文件: 文件名需包含'impedence'")
         imp_data = pd.read_csv(os.path.join(self.file_dir, impedence_file))
-        self.impedence = np.array(imp_data['Impedance Magnitude at 1000 Hz (ohms)'])
+        result['impedence'] = np.array(imp_data['Impedance Magnitude at 1000 Hz (ohms)'])
 
         # 获取mapping
         mapping_file = None
@@ -48,15 +75,9 @@ class DataParse(FileProcess):
         with open(os.path.join(self.file_dir, mapping_file), 'r', encoding="utf-8") as f:
             content = f.read()
 
-        self.mapping = np.array([int(x.strip()) for x in content.replace('\n', ',').split(',') if x.strip()])[:3]
+        result['mapping'] = np.array([int(x.strip()) for x in content.replace('\n', ',').split(',') if x.strip()])[:3]
 
-        # 缓存数据文件并自动判断格式
-        self.files = [os.path.join(self.file_dir, f) for f in os.listdir(self.file_dir)
-                      if f.endswith(".wl") or f.endswith(".edf") or f.endswith(".dat")]
-        self.file_format = self._detect_file_format()
-
-        # 工具类加载
-        self.hardware_resources = hardware_resources()
+        return result
 
     def _detect_file_format(self):
         """
@@ -187,12 +208,8 @@ class DataParse(FileProcess):
         datasets['fs'] = data['frequency_parameters']['amplifier_sample_rate']
         datasets['mapping'] = self.mapping
         datasets['ele_type'] = self.elec_type
-        datasets['subject_id'] = self.files.index(wl_file)
-
-        basename = os.path.basename(wl_file)
-        date_str, time_str = basename.split(".")[0].split("_")[1:]
-        dt = datetime.strptime(f"{date_str}_{time_str}", "%y%m%d_%H%M%S")
-        datasets['date'] = dt.strftime("%Y-%m-%d %H:%M:%S")
+        datasets['subject_id'] = self.subject_id
+        datasets['date'] = self.date
 
         return datasets
 
@@ -206,12 +223,8 @@ class DataParse(FileProcess):
         datasets['fs'] = raw_edf.info['sfreq']
         datasets['mapping'] = self.mapping
         datasets['ele_type'] = self.elec_type
-        datasets['subject_id'] = self.files.index(edf_file)
-
-        basename = os.path.basename(edf_file)
-        date_str, time_str = basename.split(".")[0].split("_")[1:3]
-        dt = datetime.strptime(f"{date_str}_{time_str}", "%Y%m%d_%H%M%S")
-        datasets['date'] = dt.strftime("%Y-%m-%d %H:%M:%S")
+        datasets['subject_id'] = self.subject_id
+        datasets['date'] = self.date
 
         return datasets
 
@@ -240,15 +253,13 @@ class DataParse(FileProcess):
     def _load_full(self, is_parallel, max_workers):
         """
         全量加载：针对于数据小，文件少
-        策略：一次性加载所有文件，并一起返回
+        策略：一次性加载所有文件，合并所有data，其他字段保持不变
         """
         all_data = []
 
-        # 串行加载所有文件
         if not is_parallel:
             for file_path in self.files:
                 all_data.append(self._parse_file(file_path))
-        # 并行加载所有文件
         else:
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 futures = {executor.submit(self._parse_file, f): f for f in self.files}
@@ -258,22 +269,28 @@ class DataParse(FileProcess):
                     except Exception as e:
                         print(f"加载文件失败: {futures[future]}, 错误: {e}")
 
-        yield all_data
+        merged_dataset = {}
+        all_datas = [d['data'] for d in all_data]
+        merged_dataset['data'] = np.concatenate(all_datas, axis=1)
+
+        for key in all_data[0].keys():
+            if key != 'data':
+                merged_dataset[key] = all_data[0][key]
+
+
+
+        yield merged_dataset
 
     def _load_merged(self, is_parallel, max_workers):
         """
         合并加载:针对于数据小但文件多
-        策略：每批加载的数据量不超过空余磁盘容量的1%
-
-        测试结果：针对30MB单个文件，121个文件，不足以占满磁盘容量的1%；此处为了显示迭代器效果所以，选择阈值为磁盘容量额0.001
+        策略：每批加载的数据量不超过空余磁盘容量的1%，合并每批的data字段
         """
         hardware = self.get_profile()
         disk_limit_gb = hardware['disk_free_gb'] * 1e-3  # 磁盘容量0.001
 
-        # 计算每个文件大小
         file_sizes_gb = [self.get_size_single_file(f) / 1024 for f in self.files]
 
-        # 分批：每批不超过 disk_limit_gb
         batch_start = 0
         while batch_start < len(self.files):
             batch_size_gb = 0
@@ -285,20 +302,29 @@ class DataParse(FileProcess):
 
             batch_files = self.files[batch_start:batch_end]
 
+            # 加载当前批次
             if not is_parallel:
-                batch_data = [self._parse_file(f) for f in batch_files]
+                batch_data_list = [self._parse_file(f) for f in batch_files]
             else:
                 with ThreadPoolExecutor(max_workers=max_workers) as executor:
                     futures = {executor.submit(self._parse_file, f): f for f in batch_files}
-                    batch_data = []
+                    batch_data_list = []
                     for future in as_completed(futures):
                         try:
-                            batch_data.append(future.result())
+                            batch_data_list.append(future.result())
                         except Exception as e:
                             print(f"加载文件失败: {futures[future]}, 错误: {e}")
 
-            # 返回当前批次的数据
-            yield batch_data
+            merged_batch = {}
+            batch_datas = [d['data'] for d in batch_data_list]
+            merged_batch['data'] = np.concatenate(batch_datas, axis=1)
+
+            for key in batch_data_list[0].keys():
+                if key != 'data':
+                    merged_batch[key] = batch_data_list[0][key]
+
+
+            yield merged_batch
 
             batch_start = batch_end
 
