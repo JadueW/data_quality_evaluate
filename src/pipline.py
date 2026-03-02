@@ -2,6 +2,8 @@
 # author:70706
 # datetime:2026/3/2 14:03
 # software: PyCharm
+import os.path
+
 from src.data_io.dataParse import DataParse
 from src.preprocessing.preprocessor import Preprocessor
 from src.metrics.statistics import Statistics
@@ -11,6 +13,9 @@ from src.metrics.statisticsAggregator import StatisticsAggregator
 if __name__ == '__main__':
 
     data_dir = '../data/raw/小黑20260114第二只001对照组'
+    output_dir = os.path.join("../results/",data_dir.split('/')[-1])
+
+    os.makedirs(output_dir,exist_ok=True)
     data = DataParse(data_dir)
     delta = 100
 
