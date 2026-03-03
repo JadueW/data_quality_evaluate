@@ -10,7 +10,6 @@
         amp,std,mean的max, min, avg, median, varibility, 1%, 5%, 95% 99%
         impedence_range(min,max,avg)
 """
-from statistics import variance
 
 import numpy as np
 from tdigest import TDigest
@@ -96,7 +95,13 @@ class ExtractReportFeatures:
 
     def _compute_win_ch(self):
         # 获取电极拓扑的分布情况（不同channel的True，False）
-        all_ch_check_mask = self.all_group_statistics_data["all_ch_check_mask"]
+        all_ch_check_mask = []
+        all_win_check_mask = []
+        for group_id, group_values in self.all_group_statistics_data.items():
+            all_ch_check_mask = self.all_group_statistics_data[group_id]["all_ch_check_mask"]
+            all_win_check_mask = self.all_group_statistics_data[group_id]['all_win_check_mask']
+            break
+
         total_ch, bad_ch, bad_ratio = 0, 0, 0.0
         for ch in all_ch_check_mask:
             total_ch += 1
@@ -107,7 +112,6 @@ class ExtractReportFeatures:
         bad_ratio = bad_ch / total_ch
 
         # 获取有效窗口数量
-        all_win_check_mask = self.all_group_statistics_data['all_win_check_mask']
         valid_win = 0
         for ch in all_win_check_mask:
             if ch:
