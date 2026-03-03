@@ -4,7 +4,7 @@
 # software: PyCharm
 import os.path
 
-from src.analyse import handle_statistics, handle_snr
+from src.analyse import handle_statistics, handle_snr, handle_line_noise_detection
 from src.data_io.dataParse import DataParse
 from src.metrics.statistics import Statistics
 from src.metrics.statisticsAggregator import StatisticsAggregator
@@ -41,6 +41,9 @@ if __name__ == '__main__':
     timepoints = 0
     fs = 0
     impedence = 0
+
+    # line_noise_detect 记录
+    is_detect_line_noise = False
     # 4. 迭代处理 预处理和统计分析
     try:
         while datasets := next(dataloader):
@@ -52,7 +55,6 @@ if __name__ == '__main__':
             # 4.1 针对统计指标展开
             # 4.1.1 获取针对统计分析的预处理数据
             preprocessed_data_dict = handle_statistics(datasets)
-
 
             # 4.1.2 对于每个窗口的每个组进行统计
             for win_id, win_value in preprocessed_data_dict.items():
@@ -69,13 +71,19 @@ if __name__ == '__main__':
             # 4.2.1 获取指数据各窗口下SNR的计算结果
             SNR_data_dict = handle_snr(datasets)
             # TODO 4.2.2 对每个窗口进行统计
+
+            # 4.3 计算line_noise
+            if not is_detect_line_noise:
+                line_noise = handle_line_noise_detection(datasets)
+                is_detect_line_noise = True
+
     except StopIteration as e:
         print("数据迭代【预处理和统计分析】完成")
 
     all_group_statistics_data = aggregator.aggregation_all_statistics_data(all_statistics)
 
     # 5. 计算指定指标，形成report_data数据接口
-    erf = ExtractReportFeatures(all_group_statistics_data,timepoints,fs,impedence)
+    erf = ExtractReportFeatures(all_group_statistics_data, timepoints, fs, impedence)
     report_data = erf.generate_report_statistics()  # 数据字典，参考ExtractReportFeatures中init方法
 
     # 5.1 生成绘图所需要的数据
@@ -85,10 +93,9 @@ if __name__ == '__main__':
 
     # 5.2 生成图像，默认保存在当前目录下,save_path参数可配置
     # Visualizer当作工具类使用，所以全部都是类方法
-    Visualizer.plot_ch_win_mean(all_group_ch_win_means,save_path=os.path.join(output_dir,"signal_trends_mean.png"))
-    Visualizer.plot_ch_win_std(all_group_ch_win_std,save_path=os.path.join(output_dir,"signal_trends_std.png"))
-    Visualizer.plot_electrode_topology_mask(elec_topo,save_path=os.path.join(output_dir,"elec_mapping.png"))
-
+    Visualizer.plot_ch_win_mean(all_group_ch_win_means, save_path=os.path.join(output_dir, "signal_trends_mean.png"))
+    Visualizer.plot_ch_win_std(all_group_ch_win_std, save_path=os.path.join(output_dir, "signal_trends_std.png"))
+    Visualizer.plot_electrode_topology_mask(elec_topo, save_path=os.path.join(output_dir, "elec_mapping.png"))
 
     # 6. 报告生成
     # 6.1 准备报告数据字典
@@ -153,5 +160,3 @@ if __name__ == '__main__':
     # 6.3 生成 PDF 报告
     pdf_generator.build_report(results=pdf_results)
     print(f"报告已生成: {os.path.join(output_dir, 'data_quality_report.pdf')}")
-
-
