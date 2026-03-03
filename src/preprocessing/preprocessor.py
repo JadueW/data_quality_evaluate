@@ -11,6 +11,7 @@ from mne.filter import filter_data
 class Preprocessor:
     def __init__(self, raw_data):
         self.raw_data = raw_data
+        self.group_ch_num = None
         self.fs = self.raw_data.get("fs", None)
         if not self.fs:
             raise AssertionError("未获取到采样频率fs")
@@ -46,11 +47,12 @@ class Preprocessor:
         grouped_data = []
         # 分公司内外两种电极
         if ele_type.lower().startswith("ucortex"):
-            assert total_chs > 0 and total_chs % 128 == 0, f"预期数据通道数大于0且为128倍数，得到{total_chs}个通道"
+            self.group_ch_num = 128
+            assert total_chs > 0 and total_chs % self.group_ch_num == 0, f"预期数据通道数大于0且为128倍数，得到{total_chs}个通道"
 
-            for i in range(data.shape[0] // 128):
-                s = i * 128
-                e = s + 128
+            for i in range(data.shape[0] // self.group_ch_num):
+                s = i * self.group_ch_num
+                e = s + self.group_ch_num
 
                 # 重映射
                 _remapped_data = self.__re_mapping(data[s:e, ...], mapping)
@@ -72,6 +74,7 @@ class Preprocessor:
             pse_ch_num = kwargs.get("pse_ch_num", 4)
             pse_num = kwargs.get("pse_num", 1)
             pse_order = kwargs.get("pse_order", "order")
+            self.group_ch_num = pse_ch_num
 
             # 根据电极物理位置，调整映射
             if pse_order == "order":
@@ -179,6 +182,26 @@ class Preprocessor:
         cared_data = data[self.ch_check_mask, ...]
         mean_signal = np.mean(cared_data, axis=0)
         return cared_data - mean_signal
+
+    def start(self, **kwargs):
+        rs = {}
+        grouped_data = self.group(**kwargs)
+        for gid in range(len(grouped_data)):
+            gid_data = grouped_data[gid]
+            gid_data = self.notch_filter(gid_data)
+            gid_data = self.pass_filter(gid_data)
+            is_good, ch_mask = self.bad_check(gid_data)
+            if is_good:
+                gid_data = self.re_reference(gid_data)
+
+            rs.update({
+                gid: {
+                    "is_good": is_good,
+                    "ch_check_mask": ch_mask,
+                    "processed_data": gid_data,
+                }
+            })
+        return rs
 
 
 if __name__ == '__main__':
