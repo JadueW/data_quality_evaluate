@@ -29,7 +29,7 @@ class ExtractReportFeatures:
         self.all_group_statistics_data = all_group_statistics_data
         self.impedence_range = impedence
 
-        total_ch, bad_ch, bad_ratio, valid_length = self._compute_win_ch()
+        total_ch, bad_ch, bad_ratio, valid_length,all_ch_check_mask = self._compute_win_ch()
         min_val, max_val, avg_val = self._compute_impedence_range()
 
         # 需要计算的结果
@@ -112,7 +112,7 @@ class ExtractReportFeatures:
                 valid_win += 1
         valid_length = valid_win * self.timepoints / self.fs  # 单位：时间 s
 
-        return total_ch, bad_ch, bad_ratio, valid_length
+        return total_ch, bad_ch, bad_ratio, valid_length,all_ch_check_mask
 
     def _compute_cross_win(self):
         """
@@ -225,15 +225,17 @@ class ExtractReportFeatures:
         for group_id, group_values in self.all_group_statistics_data.items():
             ch_win_means = []
             all_win_tdigest = group_values["all_win_tdigest"]
-            channel_means = []
             for ch_idx in range(len(all_win_tdigest)):
                 channel_tdigest = all_win_tdigest[ch_idx]
+                channel_means = []
                 for win_idx in range(len(channel_tdigest)):
                     centroids_list = channel_tdigest[win_idx].centroids_to_list()
                     mean_value = self._compute_dgigest_mean(centroids_list)
                     channel_means.append(mean_value)
                 ch_win_means.append(channel_means)
             all_group_ch_win_means[group_id] = ch_win_means
+
+        return all_group_ch_win_means
 
     def _compute_dgigest_mean(self, centroids_list) -> float:
         total_weight = 0
@@ -258,9 +260,9 @@ class ExtractReportFeatures:
         for group_id, group_values in self.all_group_statistics_data.items():
             ch_win_std = []
             all_win_tdigest = group_values["all_win_tdigest"]
-            channel_std = []
             for ch_idx in range(len(all_win_tdigest)):
                 channel_tdigest = all_win_tdigest[ch_idx]
+                channel_std = []
                 for win_idx in range(len(channel_tdigest)):
                     centroids_list = channel_tdigest[win_idx].centroids_to_list()
                     mean_value = self._compute_dgigest_mean(centroids_list)
@@ -273,3 +275,5 @@ class ExtractReportFeatures:
                     channel_std.append(std_value)
                 ch_win_std.append(channel_std)
             all_group_ch_win_std[group_id] = ch_win_std
+
+        return all_group_ch_win_std
