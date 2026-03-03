@@ -10,6 +10,7 @@ from src.metrics.statistics import Statistics
 from src.metrics.statisticsAggregator import StatisticsAggregator
 
 from src.report.extractReportFeatures import ExtractReportFeatures
+from src.report.report_generator import PDFReportGenerator
 
 from src.visualize.visualizer import Visualizer
 
@@ -82,12 +83,73 @@ if __name__ == '__main__':
 
     # 5.2 生成图像，默认保存在当前目录下,save_path参数可配置
     # Visualizer当作工具类使用，所以全部都是类方法
-    visualize_output = "../results"
-    Visualizer.plot_ch_win_mean(all_group_ch_win_means,save_path=os.path.join(visualize_output,"ch_win_mean.png"))
-    Visualizer.plot_ch_win_std(all_group_ch_win_std,save_path=os.path.join(visualize_output,"ch_win_std.png"))
-    Visualizer.plot_electrode_topology_mask(elec_topo,save_path=os.path.join(visualize_output,"electrode_topology_mask.png"))
+    Visualizer.plot_ch_win_mean(all_group_ch_win_means,save_path=os.path.join(output_dir,"signal_trends_mean.png"))
+    Visualizer.plot_ch_win_std(all_group_ch_win_std,save_path=os.path.join(output_dir,"signal_trends_std.png"))
+    Visualizer.plot_electrode_topology_mask(elec_topo,save_path=os.path.join(output_dir,"elec_mapping.png"))
 
 
-    # TODO: 6. 报告生成
+    # 6. 报告生成
+    # 6.1 准备报告数据字典
+    # 基本数据采集信息
+    total_duration = timepoints / fs  # 秒
+    data_size_kb = (datasets['data'].nbytes / 1024)
+    data_size_mb = data_size_kb / 1024
+
+    # 获取坏道列表（从电极拓扑掩码中提取）
+    bad_channels_list = [i for i, is_good in enumerate(elec_topo) if not is_good]
+
+    # 计算有效数据长度（秒）
+    valid_length_sec = report_data['valid_length']
+
+    # 构建 PDF 报告所需的完整数据字典
+    pdf_results = {
+        'valid_length': f"{valid_length_sec:.2f}",
+        'line_noise': "50, 100, 150, 200 Hz",
+        'bad_ch': report_data['bad_ch'],
+        'total_ch': report_data['total_ch'],
+        'bad_ratio': f"{report_data['bad_ratio'] * 100:.2f}",
+
+        'amp_range': f"{report_data['amp']['min']:.2f} - {report_data['amp']['max']:.2f}",
+        'amp_p1_p99': f"{report_data['amp']['1%']:.2f} - {report_data['amp']['99']:.2f}",
+        'amp_p5_p95': f"{report_data['amp']['5%']:.2f} - {report_data['amp']['95%']:.2f}",
+        'amp_min': f"{report_data['amp']['min']:.2f}",
+        'amp_max': f"{report_data['amp']['max']:.2f}",
+        'amp_mean': f"{report_data['amp']['avg']:.2f}",
+        'amp_median': f"{report_data['amp']['median']:.2f}",
+        'amp_variability': f"{report_data['amp']['variability']:.2f}",
+        'amp_p5_p95_range': f"{report_data['amp']['5%']:.2f} – {report_data['amp']['95%']:.2f}",
+
+        'std_range': f"{report_data['std']['min']:.2f} - {report_data['std']['max']:.2f}",
+        'std_p1_p99': f"{report_data['std']['1%']:.2f} - {report_data['std']['99']:.2f}",
+        'std_p5_p95': f"{report_data['std']['5%']:.2f} - {report_data['std']['95%']:.2f}",
+        'std_min': f"{report_data['std']['min']:.2f}",
+        'std_max': f"{report_data['std']['max']:.2f}",
+        'std_mean': f"{report_data['std']['avg']:.2f}",
+        'std_median': f"{report_data['std']['median']:.2f}",
+        'std_variability': f"{report_data['std']['variability']:.2f}",
+        'std_p5_p95_range': f"{report_data['std']['5%']:.2f} – {report_data['std']['95%']:.2f}",
+
+        'impedance_range': f"{report_data['impedence_range']['min']:.2f} - {report_data['impedence_range']['max']:.2f}",
+
+        'sample_rate': f"{fs} Hz",
+        'duration': f"{total_duration:.2f} 秒",
+        'data_kb': f"{data_size_kb:,.2f}",
+        'data_mb': f"{data_size_mb:,.2f}",
+
+        'electrode_map_image': os.path.join(output_dir, "elec_mapping.png"),
+        'trend1_image': os.path.join(output_dir, "signal_trends_mean.png"),
+        'trend2_image': os.path.join(output_dir, "signal_trends_std.png"),
+
+    }
+
+    # 6.2 创建 PDF 报告生成器实例
+    pdf_generator = PDFReportGenerator(
+        output_dir=output_dir,
+        pdf_name="data_quality_report.pdf"
+    )
+
+    # 6.3 生成 PDF 报告
+    pdf_generator.build_report(results=pdf_results)
+    print(f"报告已生成: {os.path.join(output_dir, 'data_quality_report.pdf')}")
 
 
