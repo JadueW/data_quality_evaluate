@@ -42,33 +42,35 @@ if __name__ == '__main__':
     fs = 0
     impedence = 0
     # 4. 迭代处理 预处理和统计分析
-    while datasets := next(dataloader):
+    try:
+        while datasets := next(dataloader):
 
-        timepoints = datasets['data'].shape[1]
-        fs = datasets['fs']
-        impedence = datasets['impedence']
+            timepoints = datasets['data'].shape[1]
+            fs = datasets['fs']
+            impedence = datasets['impedence']
 
-        # 4.1 针对统计指标展开
-        # 4.1.1 获取针对统计分析的预处理数据
-        preprocessed_data_dict = handle_statistics(datasets)
+            # 4.1 针对统计指标展开
+            # 4.1.1 获取针对统计分析的预处理数据
+            preprocessed_data_dict = handle_statistics(datasets)
 
 
-        # 4.1.2 对于每个窗口的每个组进行统计
-        for win_id, win_value in preprocessed_data_dict.items():
-            statistics = Statistics(win_value)
+            # 4.1.2 对于每个窗口的每个组进行统计
+            for win_id, win_value in preprocessed_data_dict.items():
+                statistics = Statistics(win_value)
 
-            # 计算单个窗口的statistics
-            win_group_statistics = statistics.compute_single_win_statistics()
+                # 计算单个窗口的statistics
+                win_group_statistics = statistics.compute_single_win_statistics()
 
-            # 存储到all_statistics中
-            all_statistics[win_counter] = win_group_statistics
-            win_counter += 1
+                # 存储到all_statistics中
+                all_statistics[win_counter] = win_group_statistics
+                win_counter += 1
 
-        # 4.2 针对SNR展示
-        # 4.2.1 获取指数据各窗口下SNR的计算结果
-        SNR_data_dict = handle_snr(datasets)
-        # TODO 4.2.2 对每个窗口进行统计
-
+            # 4.2 针对SNR展示
+            # 4.2.1 获取指数据各窗口下SNR的计算结果
+            SNR_data_dict = handle_snr(datasets)
+            # TODO 4.2.2 对每个窗口进行统计
+    except StopIteration as e:
+        print("数据迭代【预处理和统计分析】完成")
 
     all_group_statistics_data = aggregator.aggregation_all_statistics_data(all_statistics)
 
