@@ -24,8 +24,7 @@ class Visualizer:
         for ch_idx in range(n_channels):
             means = np.array(ch_win_means[ch_idx])
             offset_values = means + ch_idx * offset
-            ax.plot(range(n_windows), offset_values,
-                    color='black', linewidth=0.8, alpha=0.7)
+            ax.plot(range(n_windows), offset_values, linewidth=0.8, alpha=0.7)
 
         ax.set_xlabel('Window Index', fontsize=12)
         ax.set_ylabel('Channel (with offset)', fontsize=12)
@@ -52,8 +51,7 @@ class Visualizer:
         for ch_idx in range(n_channels):
             means = np.array(ch_win_means[ch_idx])
             offset_values = means + ch_idx * offset
-            ax.plot(range(n_windows), offset_values,
-                    color='black', linewidth=0.8, alpha=0.7)
+            ax.plot(range(n_windows), offset_values,linewidth=0.8, alpha=0.7)
 
         ax.set_xlabel('Window Index', fontsize=12)
         ax.set_ylabel('Channel (with offset)', fontsize=12)
