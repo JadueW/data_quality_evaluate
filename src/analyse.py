@@ -136,7 +136,7 @@ def handle_snr(batch_datasets):
 
             # 去掉预处理数据
             del v["processed_data"]
-        grouped_snr.update({wid: _processed_data})
+            grouped_snr.update({wid: {k: v}})
         # 将处理完的窗口数据分组保存
         # for k, v in _processed_data.items():
         #     if k not in grouped_snr:
@@ -160,6 +160,72 @@ def handle_snr(batch_datasets):
         wid += 1
 
     return grouped_snr
+
+
+def handle_line_noise_detection(batch_datasets):
+    """
+    计算线噪声
+    窗口为1s,无overlap,只需要计算一次即可
+    return:
+    {
+        group_id:{
+        win_check_mask
+        ch_check_mask
+        line_noise
+        }
+    }
+    """
+    # 制作一份数据信息模板
+    ds_template = {}
+    for k, v in batch_datasets.items():
+        if k == "data":
+            continue
+        ds_template.update({k: v})
+
+    # 分窗口
+    win_size, overlap, wid, s = 1, 0, 0, 0
+
+    grouped_line_noise_flag = {}
+    # 对批数据依次分窗处理
+    while True:
+        e = s + int(win_size * batch_datasets["fs"])
+        # 判断退出条件
+        if e > batch_datasets["data"].shape[1]:
+            break
+
+        # 取窗口
+        ds_template.update({"data": batch_datasets["data"][:, s:e]})
+        pp = Preprocessor(ds_template)
+        _processed_data = pp.start(
+            connector_mapping=None,  # 以下参数均为分组时使用的参数，在ele_type为pse-XX时起效
+            pse_num=1,
+            pse_order="order",
+            pse_ch_num=4,
+        )
+
+        # 计算每组数据是否OK
+        for k, v in _processed_data.items():
+            is_good = v["is_good"]
+
+            if is_good:
+                # 如果是好的窗口，从原始数据中计算line noise
+                line_noise_flag = pp.line_noise_detect(pp.raw_data["data"])
+                # 并更新snr
+                v.update({"line_noise": line_noise_flag})
+                # 去掉预处理数据
+                del v["processed_data"]
+                grouped_line_noise_flag.update({wid: {k: v}})
+            else:
+                # 并更新snr
+                v.update({"line_noise": []})
+                # 去掉预处理数据
+                del v["processed_data"]
+                grouped_line_noise_flag.update({wid: {k: v}})
+
+        s = e
+        wid += 1
+
+    return grouped_line_noise_flag
 
 
 if __name__ == '__main__':
