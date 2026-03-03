@@ -32,6 +32,8 @@ class ExtractReportFeatures:
         total_ch, bad_ch, bad_ratio, valid_length,all_ch_check_mask = self._compute_win_ch()
         min_val, max_val, avg_val = self._compute_impedence_range()
 
+        self.all_ch_check_mask = all_ch_check_mask
+
         # 需要计算的结果
         self.report_data = {
             "valid_length": valid_length,
@@ -212,7 +214,7 @@ class ExtractReportFeatures:
 
         return self.report_data
 
-    def _compute_ch_win_mean(self):
+    def compute_ch_win_mean(self):
         """
         计算输出跨窗口跨通道的均值
         :return: 字典嵌套列表的形式
@@ -247,7 +249,7 @@ class ExtractReportFeatures:
         mean_value = total_value / total_weight
         return mean_value
 
-    def _compute_ch_win_std(self):
+    def compute_ch_win_std(self):
         """
         计算输出跨窗口跨通道的均值
         :return: 字典嵌套列表的形式

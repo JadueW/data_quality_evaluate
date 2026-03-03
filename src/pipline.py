@@ -11,6 +11,8 @@ from src.metrics.statisticsAggregator import StatisticsAggregator
 
 from src.report.extractReportFeatures import ExtractReportFeatures
 
+from src.visualize.visualizer import Visualizer
+
 if __name__ == '__main__':
 
     data_dir = '../data/raw/小黑20260114第二只001对照组'
@@ -69,7 +71,23 @@ if __name__ == '__main__':
 
     all_group_statistics_data = aggregator.aggregation_all_statistics_data(all_statistics)
 
-    # TODO:5. 计算指定指标，形成report_data数据接口
-
+    # 5. 计算指定指标，形成report_data数据接口
     erf = ExtractReportFeatures(all_group_statistics_data,timepoints,fs,impedence)
+    report_data = erf.generate_report_statistics()  # 数据字典，参考ExtractReportFeatures中init方法
+
+    # 5.1 生成绘图所需要的数据
+    elec_topo = erf.all_ch_check_mask
+    all_group_ch_win_means = erf.compute_ch_win_mean()
+    all_group_ch_win_std = erf.compute_ch_win_std()
+
+    # 5.2 生成图像，默认保存在当前目录下,save_path参数可配置
+    # Visualizer当作工具类使用，所以全部都是类方法
+    visualize_output = "../results"
+    Visualizer.plot_ch_win_mean(all_group_ch_win_means,save_path=os.path.join(visualize_output,"ch_win_mean.png"))
+    Visualizer.plot_ch_win_std(all_group_ch_win_std,save_path=os.path.join(visualize_output,"ch_win_std.png"))
+    Visualizer.plot_electrode_topology_mask(elec_topo,save_path=os.path.join(visualize_output,"electrode_topology_mask.png"))
+
+
+    # TODO: 6. 报告生成
+
 
