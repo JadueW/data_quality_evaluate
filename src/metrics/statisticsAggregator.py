@@ -7,30 +7,24 @@
 class StatisticsAggregator:
     def __init__(self, delta=100):
         self.delta = delta
-        self.group_ids = []
 
     def aggregation_all_statistics_data(self, all_statistics):
 
         all_group_statistics_data = {}
 
         n_channels = None
+        group_ids = set()
         for win_idx in range(len(all_statistics)):
-            for group_id in self.group_ids:
-                if group_id in all_statistics[win_idx]:
+            group_ids.update(all_statistics[win_idx].keys())
+            if n_channels is None:
+                for group_id in all_statistics[win_idx].keys():
                     n_channels = len(all_statistics[win_idx][group_id]['ch_check_mask'])
                     break
-            if n_channels is not None:
-                break
 
         win_length = len(all_statistics)
 
         for win_idx in range(win_length):
-            if win_idx >= len(all_statistics):
-                continue
-
-            for group_id in self.group_ids:
-                if group_id not in all_statistics[win_idx]:
-                    continue
+            for group_id in group_ids:
 
                 data = all_statistics[win_idx][group_id]
 

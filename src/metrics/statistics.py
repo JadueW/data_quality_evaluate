@@ -31,7 +31,7 @@ class Statistics:
 
             # 定义窗口数据接口
             statistics_win_data = {
-                "win_check_mask": group_data['win_check_mask'],
+                "win_check_mask": group_data['is_good'],
                 "ch_check_mask": group_data['ch_check_mask'],
                 "win_tdigest": [TDigest(delta=self.delta) for _ in range(n_channels)],
             }
