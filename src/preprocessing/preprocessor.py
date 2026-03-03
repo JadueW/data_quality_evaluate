@@ -2,9 +2,8 @@
 # author:70706
 # datetime:2026/2/28 16:34
 # software: PyCharm
-from lib2to3.fixes.fix_getcwdu import FixGetcwdu
-
 import numpy as np
+from scipy import signal
 from scipy.signal import iirnotch, filtfilt
 from mne.filter import filter_data
 
@@ -228,9 +227,14 @@ class Preprocessor:
             is_win_good = True
         return is_win_good, self.ch_check_mask
 
-    def resample(self):
-
-        pass
+    def resample(self, data, target_fs=500):
+        """
+        重采样，使用scipy.signal中的成熟方法
+        """
+        factor = int(self.fs / target_fs)
+        expected_num = int(data.shape[1] / factor)
+        resampled = signal.resample(data, num=expected_num, axis=-1)
+        return resampled
 
     def re_reference(self, data):
         """
@@ -241,7 +245,7 @@ class Preprocessor:
         mean_signal = np.mean(cared_data, axis=0)
         return cared_data - mean_signal
 
-    def start(self, **kwargs):
+    def start(self, is_resample=False, **kwargs):
         rs = {}
         grouped_data = self.group(**kwargs)
         for gid in range(len(grouped_data)):
@@ -251,6 +255,8 @@ class Preprocessor:
             is_good, ch_mask = self.bad_check(gid_data)
             if is_good:
                 gid_data = self.re_reference(gid_data)
+            if is_resample:
+                gid_data = self.resample(gid_data, target_fs=500)
 
             rs.update({
                 gid: {
