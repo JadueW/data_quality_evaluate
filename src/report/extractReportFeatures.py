@@ -10,6 +10,7 @@
         amp,std,mean的max, min, avg, median, varibility, 1%, 5%, 95% 99%
         impedence_range(min,max,avg)
 """
+from statistics import variance
 
 import numpy as np
 from tdigest import TDigest
@@ -93,9 +94,9 @@ class ExtractReportFeatures:
 
     def _compute_win_ch(self):
         # 获取电极拓扑的分布情况（不同channel的True，False）
-        self.all_ch_check_mask = self.all_group_statistics_data["all_ch_check_mask"]
+        all_ch_check_mask = self.all_group_statistics_data["all_ch_check_mask"]
         total_ch, bad_ch, bad_ratio = 0, 0, 0.0
-        for ch in self.all_ch_check_mask:
+        for ch in all_ch_check_mask:
             total_ch += 1
             if not ch:
                 bad_ch += 1
@@ -104,9 +105,9 @@ class ExtractReportFeatures:
         bad_ratio = bad_ch / total_ch
 
         # 获取有效窗口数量
-        self.all_win_check_mask = self.all_group_statistics_data['all_win_check_mask']
+        all_win_check_mask = self.all_group_statistics_data['all_win_check_mask']
         valid_win = 0
-        for ch in self.all_win_check_mask:
+        for ch in all_win_check_mask:
             if ch:
                 valid_win += 1
         valid_length = valid_win * self.timepoints / self.fs  # 单位：时间 s
@@ -163,22 +164,16 @@ class ExtractReportFeatures:
 
                 # 2. 使用质心 + 权重计算 加权均值
                 centroids_list = ch_tdigest.centroids_to_list()
-                total_weight = 0
-                total_value = 0
-                for i in range(len(centroids_list)):
-                    total_weight += centroids_list[i]['c']
-                    total_value += centroids_list[i]['c'] * centroids_list[i]['m']
-
-                mean_value = total_value / total_weight
+                mean_value = self._compute_dgigest_mean(centroids_list)
                 all_channel_means.append(mean_value)
 
                 # 3 使用质心估算标准差
-                variance = 0.0
+                variance_val = 0.0
                 for i in range(len(centroids_list)):
-                    variance += centroids_list[i]['c'] * (centroids_list[i]['m'] - mean_value)**2
+                    variance_val += centroids_list[i]['c'] * (centroids_list[i]['m'] - mean_value)**2
                 # 使用P84-P16进行标准差估算，防止Variance为0
                 std_approxy = ch_tdigest.percentile(84) - ch_tdigest.percentile(16)
-                std_value= np.sqrt(variance) if variance > 0 else std_approxy
+                std_value= np.sqrt(variance_val) if variance_val > 0 else std_approxy
                 all_channel_stds.append(std_value)
             all_group_values[group_id] = all_channel_amps, all_channel_means, all_channel_stds
 
@@ -216,3 +211,65 @@ class ExtractReportFeatures:
             })
 
         return self.report_data
+
+    def _compute_ch_win_mean(self):
+        """
+        计算输出跨窗口跨通道的均值
+        :return: 字典嵌套列表的形式
+         all_group_ch_win_means = {
+            group_id : [[ch0_0,ch0_1,ch0_2,ch0_3,ch0_4,ch0_5,ch0_6],...],[ch1_0,ch1_1,ch1_2,ch1_3,ch1_4,ch1_5,ch1_6]...],.....]
+            # ch0_0代表在win= 0 ,ch = 0的情况下的均值
+         }
+        """
+        all_group_ch_win_means = {}
+        for group_id, group_values in self.all_group_statistics_data.items():
+            ch_win_means = []
+            all_win_tdigest = group_values["all_win_tdigest"]
+            channel_means = []
+            for ch_idx in range(len(all_win_tdigest)):
+                channel_tdigest = all_win_tdigest[ch_idx]
+                for win_idx in range(len(channel_tdigest)):
+                    centroids_list = channel_tdigest[win_idx].centroids_to_list()
+                    mean_value = self._compute_dgigest_mean(centroids_list)
+                    channel_means.append(mean_value)
+                ch_win_means.append(channel_means)
+            all_group_ch_win_means[group_id] = ch_win_means
+
+    def _compute_dgigest_mean(self, centroids_list) -> float:
+        total_weight = 0
+        total_value = 0
+        for i in range(len(centroids_list)):
+            total_weight += centroids_list[i]['c']
+            total_value += centroids_list[i]['c'] * centroids_list[i]['m']
+
+        mean_value = total_value / total_weight
+        return mean_value
+
+    def _compute_ch_win_std(self):
+        """
+        计算输出跨窗口跨通道的均值
+        :return: 字典嵌套列表的形式
+        all_group_ch_win_std = {
+            group_id : [[ch0_0,ch0_1,ch0_2,ch0_3,ch0_4,ch0_5,ch0_6],...],[ch1_0,ch1_1,ch1_2,ch1_3,ch1_4,ch1_5,ch1_6]...],.....]
+            # ch0_0代表在win= 0 ,ch = 0的情况下的std值
+        }
+        """
+        all_group_ch_win_std = {}
+        for group_id, group_values in self.all_group_statistics_data.items():
+            ch_win_std = []
+            all_win_tdigest = group_values["all_win_tdigest"]
+            channel_std = []
+            for ch_idx in range(len(all_win_tdigest)):
+                channel_tdigest = all_win_tdigest[ch_idx]
+                for win_idx in range(len(channel_tdigest)):
+                    centroids_list = channel_tdigest[win_idx].centroids_to_list()
+                    mean_value = self._compute_dgigest_mean(centroids_list)
+                    variance_val = 0.0
+                    for i in range(len(centroids_list)):
+                        variance_val += centroids_list[i]['c'] * (centroids_list[i]['m'] - mean_value) ** 2
+                    # 使用P84-P16进行标准差估算，防止Variance为0
+                    std_approxy = channel_tdigest[win_idx].percentile(84) - channel_tdigest[win_idx].percentile(16)
+                    std_value = np.sqrt(variance_val) if variance_val > 0 else std_approxy
+                    channel_std.append(std_value)
+                ch_win_std.append(channel_std)
+            all_group_ch_win_std[group_id] = ch_win_std
