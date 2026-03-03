@@ -9,18 +9,32 @@ from reportlab.platypus import Paragraph, Spacer, Table, TableStyle
 _DEFAULTS = {
     # 结论
     'valid_length':   'xx',
-    'line_noise':   '50Hz, 100Hz, ...',
+    'line_noise':     '50Hz, 100Hz, ...',
     'bad_ch':         'xx',
-    'total_ch':    'XX',
-    'bad_ratio':         'xx',
-    'amp_range':         '[-500,500]',
-    'amp_p1_p99':        '',
-    'amp_p5_p95':        '',
-    'std_range':         '[-200,200]',
-    'std_p1_p99':        '',
-    'std_p5_p95':        '',
-    'snr_range':         '[19,20]',
-    'impedance_range':   '[]',
+    'total_ch':       'XX',
+    'bad_ratio':      'xx',
+    # 幅度统计（嵌套 dict，与 ExtractReportFeatures.report_data 结构一致）
+    'amp': {
+        'min': '-5064.88', 'max': '5444.50', 'avg': '-0.00',
+        'median': '0.13',  'variability': '28.37',
+        '1%': 'xx', '5%': '-33.73', '95%': '33.11', '99%': 'xx',
+    },
+    # 标准差统计（嵌套）
+    'std': {
+        'min': '-5064.88', 'max': '5444.50', 'avg': '-0.00',
+        'median': '0.13',  'variability': '28.37',
+        '1%': 'xx', '5%': '-33.73', '95%': '33.11', '99%': 'xx',
+    },
+    # SNR 统计（嵌套）
+    'snr_range': {
+        'min': '20.30', 'max': '22.23', 'avg': '20.95',
+        'median': '20.92', 'variability': '0.51',
+        '5%': '20.41', '95%': '22.07',
+    },
+    # 阻抗（嵌套）
+    'impedence_range': {
+        'min': '0.0', 'max': '0.0', 'avg': '0.0',
+    },
     # 电极图
     'bad_channels':      [],
     # 数据采集摘要
@@ -46,27 +60,6 @@ _DEFAULTS = {
     'notch_freqs': '50Hz, 99.9Hz, 150.1Hz, 199.9Hz, 250Hz, 299.8Hz',
     'bandpass':    '1-200 Hz',
     'avg_ref':     '是',
-    # 幅度统计
-    'amp_min':           '-5064.88',
-    'amp_max':           '5444.50',
-    'amp_mean':          '-0.00',
-    'amp_median':        '0.13',
-    'amp_variability':   '28.37',
-    'amp_p5_p95_range':  '-33.73 – 33.11',
-    # 标准差统计
-    'std_min':           '-5064.88',
-    'std_max':           '5444.50',
-    'std_mean':          '-0.00',
-    'std_median':        '0.13',
-    'std_variability':   '28.37',
-    'std_p5_p95_range':  '-33.73 – 33.11',
-    # SNR 统计
-    'snr_min':           '20.30',
-    'snr_max':           '22.23',
-    'snr_mean':          '20.95',
-    'snr_median':        '20.92',
-    'snr_variability':   '0.51',
-    'snr_p5_p95_range':  '20.41 – 22.07',
 }
 
 class PDFReportGenerator:
@@ -114,7 +107,7 @@ class PDFReportGenerator:
         ]:
             if _try(name, path):
                 self.default_font = name
-                print("使用字体: " + name + " (" + path + ")")
+                #print("使用字体: " + name + " (" + path + ")")
                 break
 
         # 标题字体：黑体（加粗）
@@ -156,7 +149,7 @@ class PDFReportGenerator:
         ))
         styles.add(ParagraphStyle(
             name='Footnote', fontName=self.default_font,
-            fontSize=7, textColor=colors.grey, leading=9, spaceAfter=2,
+            fontSize=8, textColor=colors.grey, leading=10, spaceAfter=2,
         ))
         return styles
 
@@ -165,6 +158,13 @@ class PDFReportGenerator:
         if results and key in results:
             return results[key]
         return _DEFAULTS[key]
+
+    def _gn(self, results, outer, inner):
+        """从嵌套 dict 取值，优先 results，缺省用 _DEFAULTS"""
+        outer_val = results.get(outer, {}) if results else {}
+        if inner in outer_val:
+            return outer_val[inner]
+        return _DEFAULTS[outer][inner]
 
     # ── 中英混排：非 CJK 字符用 Times New Roman，CJK 保持仿宋 ──────────
     def _mix_fonts(self, text):
@@ -190,16 +190,25 @@ class PDFReportGenerator:
     # 第1页：结论 + 电极拓扑图 + 脚注¹~⁷
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     def _add_conclusion(self, r):
-        g = lambda k: self._get(r, k)
+        g  = lambda k:    self._get(r, k)
+        gn = lambda o, i: self._gn(r, o, i)
+        amp_range  = "[" + str(gn('amp', 'min'))             + ", " + str(gn('amp', 'max'))             + "]"
+        amp_p1_p99 = str(gn('amp', '1%'))  + " – " + str(gn('amp', '99%'))
+        amp_p5_p95 = str(gn('amp', '5%'))  + " – " + str(gn('amp', '95%'))
+        std_range  = "[" + str(gn('std', 'min'))             + ", " + str(gn('std', 'max'))             + "]"
+        std_p1_p99 = str(gn('std', '1%'))  + " – " + str(gn('std', '99%'))
+        std_p5_p95 = str(gn('std', '5%'))  + " – " + str(gn('std', '95%'))
+        snr_range  = "[" + str(gn('snr_range', 'min'))       + ", " + str(gn('snr_range', 'max'))       + "]"
+        imp_range  = "[" + str(gn('impedence_range', 'min')) + ", " + str(gn('impedence_range', 'max')) + "]"
         self.story.append(Paragraph("结论<font size=10><super>1</super></font>：", self.styles['Section']))
         lines = [
-            "信号有效时长<font size=8><super>2</super></font>：---s（" + g('valid_length') + "%）；",
-            "工频噪声：[" + g('line_noise') + "]；",
+            "信号有效时长<font size=8><super>2</super></font>：---s（" + str(g('valid_length')) + "%）；",
+            "工频噪声：[" + str(g('line_noise')) + "]；",
             "坏道数/总数<font size=8><super>3</super></font>（百分比）：" + str(g('bad_ch')) + "/" + str(g('total_ch')) + "（" + str(g('bad_ratio')) + "%）；",
-            "幅度分布范围<font size=8><super>4</super></font>：" + g('amp_range') + "uV；1%-99%区间范围：<u>" + g('amp_p1_p99') + "uV</u>；5%-95%区间范围：<u>" + g('amp_p5_p95') + "uV</u>；",
-            "标准差分布范围：" + g('std_range') + "uV；1%-99%区间范围：<u>" + g('std_p1_p99') + "uV</u>；5%-95%区间范围：<u>" + g('std_p5_p95') + "uV</u>；",
-            "信噪比分布范围<font size=8><super>5</super></font>：" + g('snr_range') + "dB；",
-            "阻抗分布范围<font size=8><super>6</super></font>：" + g('impedance_range') + "ohm。",
+            "幅度分布范围<font size=8><super>4</super></font>：" + amp_range + "uV；1%-99%区间范围：<u>" + amp_p1_p99 + "uV</u>；5%-95%区间范围：<u>" + amp_p5_p95 + "uV</u>；",
+            "标准差分布范围：" + std_range + "uV；1%-99%区间范围：<u>" + std_p1_p99 + "uV</u>；5%-95%区间范围：<u>" + std_p5_p95 + "uV</u>；",
+            "信噪比分布范围<font size=8><super>5</super></font>：" + snr_range + "dB；",
+            "阻抗分布范围<font size=8><super>6</super></font>：" + imp_range + "ohm。",
             "分析拓扑<font size=8><super>7</super></font>：",
         ]
         for line in lines:
@@ -252,7 +261,7 @@ class PDFReportGenerator:
 
         footnotes = [
             "<super>1</super> 统计分析结论均在预处理操作之后进行计算。预处理操作包括，陷波、带通滤波、降采样、去坏道后的平均参考。",
-            "<super>2</super> 将信号以 5 秒为一个窗口进行划分，无重叠，若当前窗口内坏道率>30%，则视为异常片段，并将整个片段的信号舍弃，不纳入统计分析。",
+            "<super>2</super> 将信号以5秒为一个窗口进行划分，无重叠，若当前窗口内坏道率>30%，则视为异常片段，并将整个片段的信号舍弃，不纳入统计分析。",
             "<super>3</super> 坏道的判断标准分为两个部分：i 当前通道的标准差大于 100；ii 当前通道的阻抗大于 1Mohm。",
             "<super>4</super> 分窗口并在舍弃坏道后进行统计；标准差的计算亦是如此分析。",
             "<super>5</super> 参考 https://doi.org/10.1016/j.celrep.2023.112467 计算 LFP 的方法。",
@@ -261,7 +270,7 @@ class PDFReportGenerator:
         ]
         for note in footnotes:
             self.story.append(Paragraph(
-                "<font name='" + self.default_font + "' size=8 color=black>" + note + "</font>",
+                "<font name='" + self.default_font + "' size=9 color=black>" + note + "</font>",
                 self.styles['Footnote'],
             ))
             self.story.append(Spacer(1, 1*mm))
@@ -324,15 +333,15 @@ class PDFReportGenerator:
         self._add_table("预处理参数：", data, [5.5*cm, 10.5*cm])
 
     def _add_amp_table(self, r):
-        g = lambda k: self._get(r, k)
+        gn = lambda i: self._gn(r, 'amp', i)
         data = [
             ["统计量",  "数值 (μV)"],
-            ["最小值",  g('amp_min')],
-            ["最大值",  g('amp_max')],
-            ["均值",    g('amp_mean')],
-            ["中位数",  g('amp_median')],
-            ["变异性",  g('amp_variability')],
-            ["5%-95%", g('amp_p5_p95_range')],
+            ["最小值",  gn('min')],
+            ["最大值",  gn('max')],
+            ["均值",    gn('avg')],
+            ["中位数",  gn('median')],
+            ["变异性",  gn('variability')],
+            ["5%-95%", str(gn('5%')) + " – " + str(gn('95%'))],
         ]
         self._add_table("幅度统计：", data, [8*cm, 8*cm])
 
@@ -340,28 +349,28 @@ class PDFReportGenerator:
     # 第3页：标准差统计 / SNR统计 / 趋势图1 + 脚注⁸
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     def _add_std_table(self, r):
-        g = lambda k: self._get(r, k)
+        gn = lambda i: self._gn(r, 'std', i)
         data = [
             ["统计量",  "数值 (μV)"],
-            ["最小值",  g('std_min')],
-            ["最大值",  g('std_max')],
-            ["均值",    g('std_mean')],
-            ["中位数",  g('std_median')],
-            ["变异性",  g('std_variability')],
-            ["5%-95%", g('std_p5_p95_range')],
+            ["最小值",  gn('min')],
+            ["最大值",  gn('max')],
+            ["均值",    gn('avg')],
+            ["中位数",  gn('median')],
+            ["变异性",  gn('variability')],
+            ["5%-95%", str(gn('5%')) + " – " + str(gn('95%'))],
         ]
         self._add_table("标准差统计：", data, [8*cm, 8*cm])
 
     def _add_snr_table(self, r):
-        g = lambda k: self._get(r, k)
+        gn = lambda i: self._gn(r, 'snr_range', i)
         data = [
             ["统计量",  "数值 (dB)"],
-            ["最小值",  g('snr_min')],
-            ["最大值",  g('snr_max')],
-            ["均值",    g('snr_mean')],
-            ["中位数",  g('snr_median')],
-            ["变异性",  g('snr_variability')],
-            ["5%-95%", g('snr_p5_p95_range')],
+            ["最小值",  gn('min')],
+            ["最大值",  gn('max')],
+            ["均值",    gn('avg')],
+            ["中位数",  gn('median')],
+            ["变异性",  gn('variability')],
+            ["5%-95%", str(gn('5%')) + " – " + str(gn('95%'))],
         ]
         self._add_table("SNR 统计：", data, [8*cm, 8*cm])
 
@@ -465,7 +474,7 @@ class PDFReportGenerator:
         self._add_snr_table(r)
 
         footnote8 = Paragraph(
-            "<font name='" + self.default_font + "' size=8 color=black>"
+            "<font name='" + self.default_font + "' size=9 color=black>"
             "<super>8</super> 对信号做预处理后，以 5 秒为一个窗口计算均值，并观察有效通道的变化趋势。"
             "</font>",
             self.styles['Footnote'],
