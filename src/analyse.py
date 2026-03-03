@@ -3,6 +3,7 @@
 # datetime:2026/3/3 11:18
 # software: PyCharm
 import numpy as np
+from pandas.core.dtypes.inference import is_scalar
 
 from .metrics.calc_snr import compute_single_window_snr
 from .preprocessing.preprocessor import Preprocessor
@@ -113,6 +114,7 @@ def handle_snr(batch_datasets):
         ds_template.update({"data": batch_datasets["data"][:, s:e]})
         pp = Preprocessor(ds_template)
         _processed_data = pp.start(
+            is_resample=True,  # 计算SNR时降采样, 加快计算时间
             connector_mapping=None,  # 以下参数均为分组时使用的参数，在ele_type为pse-XX时起效
             pse_num=1,
             pse_order="order",
