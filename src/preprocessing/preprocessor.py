@@ -2,6 +2,7 @@
 # author:70706
 # datetime:2026/2/28 16:34
 # software: PyCharm
+from lib2to3.fixes.fix_getcwdu import FixGetcwdu
 
 import numpy as np
 from scipy.signal import iirnotch, filtfilt
@@ -203,7 +204,7 @@ class Preprocessor:
 
         filtered_data = filter_data(data, sfreq=self.fs, l_freq=l_freq, h_freq=h_freq,
                                     l_trans_bandwidth=l_trans_bandwidth, h_trans_bandwidth=h_trans_bandwidth,
-                                    method=method)
+                                    method=method, verbose=False)
 
         return filtered_data
 
