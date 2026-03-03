@@ -13,6 +13,7 @@ class Preprocessor:
         self.raw_data = raw_data
         self.group_ch_num = None
         self.fs = self.raw_data.get("fs", None)
+        self.resample_fs = None
         if not self.fs:
             raise AssertionError("未获取到采样频率fs")
         self.harmonics = [50, 100, 150, 200]
@@ -231,6 +232,7 @@ class Preprocessor:
         """
         重采样，使用scipy.signal中的成熟方法
         """
+        self.resample_fs = target_fs
         factor = int(self.fs / target_fs)
         expected_num = int(data.shape[1] / factor)
         resampled = signal.resample(data, num=expected_num, axis=-1)

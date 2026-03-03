@@ -3,7 +3,6 @@
 # datetime:2026/3/3 11:18
 # software: PyCharm
 import numpy as np
-from pandas.core.dtypes.inference import is_scalar
 
 from .metrics.calc_snr import compute_single_window_snr
 from .preprocessing.preprocessor import Preprocessor
@@ -114,7 +113,7 @@ def handle_snr(batch_datasets):
         ds_template.update({"data": batch_datasets["data"][:, s:e]})
         pp = Preprocessor(ds_template)
         _processed_data = pp.start(
-            is_resample=True,  # 计算SNR时降采样, 加快计算时间
+            is_resample=True,  # 计算SNR时降采样, 加快计算时间, 注意后面使用采样频率
             connector_mapping=None,  # 以下参数均为分组时使用的参数，在ele_type为pse-XX时起效
             pse_num=1,
             pse_order="order",
@@ -126,7 +125,7 @@ def handle_snr(batch_datasets):
             is_good = v["is_good"]
 
             if is_good:
-                snr_info = compute_single_window_snr(v["processed_data"], batch_datasets["fs"])
+                snr_info = compute_single_window_snr(v["processed_data"], pp.resample_fs)
                 # 并更新snr
                 if not np.all(snr_info):
                     v.update({"win_SNR": snr_info["snr"]})
@@ -157,7 +156,7 @@ def handle_snr(batch_datasets):
         #     grouped_snr[k]["win_check_mask"].append(is_good)
         #     grouped_snr[k]["ch_check_mask"].append(v["ch_check_mask"])
 
-        s = s + int(overlap * batch_datasets["fs"])
+        s = s + int(overlap * pp.resample_fs)
         wid += 1
 
     return grouped_snr
