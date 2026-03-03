@@ -15,6 +15,7 @@ class Preprocessor:
         self.fs = self.raw_data.get("fs", None)
         if not self.fs:
             raise AssertionError("未获取到采样频率fs")
+        self.harmonics = [50, 100, 150, 200]
         self.ch_check_mask = None
 
     def group(self, **kwargs):
@@ -103,11 +104,67 @@ class Preprocessor:
         data = data[new_mapping, ...]
         return data
 
-    def line_noise_detect(self):
+    def line_noise_detect(self, data):
         """
         检测线噪声，频率分辨率为1Hz
+        :param data: 输入数据，形状为 (n_channels, n_samples)
+        :return: noise_flag: 布尔数组，形状为 (n_channels,)，True表示该通道存在工频噪声异常
         """
-        pass
+        # ========== 1. 校验输入和分辨率（确保频率分辨率为1Hz） ==========
+        n_channels, n_samples = data.shape
+        # 频率分辨率Δf = fs / n_samples，要求Δf=1Hz → n_samples必须等于fs
+        if self.fs != n_samples:
+            raise ValueError(f"为保证1Hz频率分辨率，数据长度需等于采样率（当前采样率{self.fs}，数据长度{n_samples}）")
+
+        # ========== 2. 计算FFT和幅值谱（仅保留正频率） ==========
+        # 沿时长维度（-1维）计算FFT
+        fft_rs = np.fft.fft(data, axis=-1, norm=None)
+        # 计算幅值谱（归一化：非直流分量×2/N，直流分量/N）
+        fft_amp = np.abs(fft_rs) / n_samples
+        fft_amp[:, 1:] = fft_amp[:, 1:] * 2  # 正频率部分幅值还原
+
+        # 生成频率轴（仅保留正频率）
+        freqs = np.fft.fftfreq(n_samples, 1 / self.fs)
+        positive_mask = freqs >= 0
+        freqs_pos = freqs[positive_mask]
+        fft_amp_pos = fft_amp[:, positive_mask]
+
+        # ========== 3. 定位工频及其谐波的频率索引 ==========
+        # 找到50/100/150Hz对应的索引（分辨率1Hz，直接匹配）
+        freq_indices = []
+        for freq in self.harmonics:
+            if freq in freqs_pos:
+                freq_indices.append(np.where(freqs_pos == freq)[0][0])
+            else:
+                raise ValueError(f"频率{freq}Hz超出奈奎斯特频率（{self.fs / 2}Hz），请检查采样率")
+
+        # ========== 4. 峰值检测+异常判断 ==========
+        # 策略：计算工频谐波幅值与周围频率幅值的比值，超过阈值则判定为异常
+        noise_flag = np.zeros((n_channels, len(self.harmonics)), dtype=bool)
+        threshold = 3.0  # 幅值比值阈值（可根据实际场景调整）
+
+        for ch in range(n_channels):
+            # 提取当前通道的幅值谱
+            ch_amp = fft_amp_pos[ch]
+
+            # 计算每个工频谐波的局部幅值均值（周围±5Hz，排除自身）
+            harmonic_amps = []
+            for idx in freq_indices:
+                # 取周围频率的幅值（避免越界）
+                start = max(0, idx - 5)
+                end = min(len(ch_amp) - 1, idx + 5)
+                local_amps = ch_amp[start:end + 1]
+                local_mean = np.mean(local_amps[local_amps != ch_amp[idx]])  # 排除自身
+                # 计算当前谐波幅值与局部均值的比值
+                amp_ratio = ch_amp[idx] / local_mean if local_mean > 0 else np.inf
+                harmonic_amps.append(amp_ratio)
+
+            # 谐波的比值超过阈值，判定为存在异常工频噪声
+            for hid, ratio in enumerate(harmonic_amps):
+                if ratio > threshold:
+                    noise_flag[ch, hid] = True
+
+        return noise_flag
 
     def notch_filter(self, data):
         '''
@@ -127,7 +184,7 @@ class Preprocessor:
         data = data * 1.0
 
         Q = 30
-        notch_freqs = [50, 100, 150, 200]
+        notch_freqs = self.harmonics
 
         for freq in notch_freqs:
             b, a = iirnotch(freq, Q=Q, fs=self.fs)
