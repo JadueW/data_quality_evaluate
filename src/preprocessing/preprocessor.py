@@ -148,12 +148,12 @@ class Preprocessor:
             # 提取当前通道的幅值谱
             ch_amp = fft_amp_pos[ch]
 
-            # 计算每个工频谐波的局部幅值均值（周围±5Hz，排除自身）
+            # 计算每个工频谐波的局部幅值均值（周围±2Hz，排除自身）
             harmonic_amps = []
             for idx in freq_indices:
                 # 取周围频率的幅值（避免越界）
-                start = max(0, idx - 5)
-                end = min(len(ch_amp) - 1, idx + 5)
+                start = max(0, idx - 2)
+                end = min(len(ch_amp) - 1, idx + 2)
                 local_amps = ch_amp[start:end + 1]
                 local_mean = np.mean(local_amps[local_amps != ch_amp[idx]])  # 排除自身
                 # 计算当前谐波幅值与局部均值的比值
