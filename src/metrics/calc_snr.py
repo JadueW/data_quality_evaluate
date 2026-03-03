@@ -52,7 +52,7 @@ def compute_single_window_snr(window_data, sample_rate, activity_threshold_std=3
 
     for ch in range(n_channels):
         # TODO 判断当前通道是否为坏道
-        
+
         ch_envelope = smoothed_envelope[ch, :]
 
         # 伪影检测
@@ -72,7 +72,6 @@ def compute_single_window_snr(window_data, sample_rate, activity_threshold_std=3
         # 识别高活动状态
         high_activity_mask = ch_envelope > threshold
         high_activity_mask[artifact_mask] = False
-
 
         # 形态学滤波（只做一次 opening + closing）
         high_activity_mask = ndimage.binary_opening(high_activity_mask, structure=se_open)
@@ -109,8 +108,6 @@ def compute_single_window_snr(window_data, sample_rate, activity_threshold_std=3
         'n_high_activity_samples': sum(len(arr) for arr in high_activity_states),
         'n_low_activity_samples': sum(len(arr) for arr in low_activity_states)
     }
-
-
 
 
 if __name__ == '__main__':
