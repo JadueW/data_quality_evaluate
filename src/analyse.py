@@ -260,13 +260,13 @@ def handle_line_noise_detection(batch_datasets):
         if valid_win.shape[0]:
             # 存在有效窗口
             valid_win_line_noise = np.array(all_win_value["line_noise"])[valid_win.reshape(-1, ), ...]
-            #  (wid, chid, noise_flag) 调整维度
+            #  (wid, chid, noise_flag) 调整维度 (chid, wid, noise_flag)
             valid_win_line_noise = np.array(valid_win_line_noise).transpose(1, 0, 2)
             # 取各通道所有窗口结果
-            for ch in valid_win_line_noise:
+            for ch in range(valid_win_line_noise.shape[0]):
                 ch_all_line_noise = valid_win_line_noise[ch, ...]
                 win_num, ln_num = ch_all_line_noise.shape
-                ratio = np.sum(ch_all_line_noise, axis=1) / win_num
+                ratio = np.sum(ch_all_line_noise, axis=0) / win_num
                 _temp = np.ones(ln_num, dtype=bool)
                 # 在30个窗口中，小于30%支持当前通道有该噪声的则为False
                 _temp[ratio < 0.3] = False
@@ -275,7 +275,7 @@ def handle_line_noise_detection(batch_datasets):
             # 对当前数据做整理，形成报告内容
             gid_ch_line_noise = np.array(gid_ch_line_noise)
             ch_num, ln_num = gid_ch_line_noise.shape
-            exit_ln_ch_num = np.sum(gid_ch_line_noise, axis=1)
+            exit_ln_ch_num = np.sum(gid_ch_line_noise, axis=0)
             for lnid in range(ln_num):
                 if exit_ln_ch_num[lnid]:
                     line_noise_name = str((lnid + 1) * 50) + "Hz"
