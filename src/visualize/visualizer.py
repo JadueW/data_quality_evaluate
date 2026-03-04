@@ -112,17 +112,13 @@ class Visualizer:
                     fontsize=7, color='white', fontweight='bold')
 
         # 设置坐标轴
-        ax.set_xlim(-0.5, n_cols * ch_spacing + 0.5)
-        ax.set_ylim(-0.5, n_rows * ch_spacing + 0.5)
+        ax.set_xlim(-0.2, n_cols * ch_spacing + 0.2)
+        ax.set_ylim(-0.2, n_rows * ch_spacing + 0.2)
         ax.set_aspect('equal')
         ax.axis('off')
 
         # 添加标题
-        total = len(all_ch_check_mask)
-        good = sum(all_ch_check_mask)
-        bad = total - good
-        ax.set_title(f'Electrode Topology',
-                     fontsize=12, pad=10)
+        ax.set_title(f'Electrode Topology',fontsize=12)
 
         plt.tight_layout()
         plt.savefig(kwargs.get('save_path', {"./ElectrodeTopology.png"}), dpi=600)

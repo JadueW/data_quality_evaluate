@@ -110,5 +110,89 @@ def compute_single_window_snr(window_data, sample_rate, activity_threshold_std=3
     }
 
 
-if __name__ == '__main__':
-    print("hi")
+def _win_SNR_statistics(snr_data_win_dict):
+    group_data = {}
+    for group_id, group_value in snr_data_win_dict.items():
+        group_data[group_id] = group_value['win_SNR']
+
+    return group_data
+
+def SNR_statistics(snr_data_dict):
+
+    group_ids = list(snr_data_dict[0].keys())
+    all_group_data = {}
+    for id in group_ids:
+        all_group_data[id] = []
+
+    for win_id , win_value in snr_data_dict.items():
+        group_data = _win_SNR_statistics(win_value)
+
+        for group_id, group_value in group_data.items():
+            all_group_data[group_id].append(group_value)
+
+    return all_group_data
+
+
+def compute_snr_statistics(all_group_data):
+
+    snr_group_statistics = {}
+
+    for group_id, group_data in all_group_data.items():
+        # 合并所有窗口的数据为一个一维数组
+        # group_data是list of arrays，需要concatenate
+        if not group_data or len(group_data) == 0:
+            snr_group_statistics[group_id] = {
+                "min": 0.,
+                "max": 0.,
+                "avg": 0.,
+                "median": 0.,
+                "variability": 0.,
+                "p5-p95": "N/A",
+            }
+            continue
+
+        all_snr_values = np.concatenate(group_data)
+
+        min_val = np.min(all_snr_values)
+        max_val = np.max(all_snr_values)
+        avg_val = np.mean(all_snr_values)
+        median_val = np.median(all_snr_values)
+        std_val = np.std(all_snr_values, ddof=0)
+
+        p5 = np.percentile(all_snr_values, 5)
+        p95 = np.percentile(all_snr_values, 95)
+
+        snr_statistics = {
+            "min": round(min_val, 2),
+            "max": round(max_val, 2),
+            "avg": round(avg_val, 2),
+            "median": round(median_val, 2),
+            "variability": round(std_val, 2),
+            "p5-p95": f"{p5:.2f} - {p95:.2f}",
+        }
+
+        snr_group_statistics[group_id] = snr_statistics
+
+    return snr_group_statistics
+
+
+if __name__ == "__main__":
+    all_group_data = {
+        0: [
+            np.array([20.5, 21.0, 19.8, 22.1]),
+            np.array([21.2, 20.8, 20.3, 21.5]),
+            np.array([20.1, 21.5, 20.7, 20.9]),
+        ],
+        1: [
+            np.array([20.8, 21.2, 20.5, 21.8]),
+            np.array([21.5, 20.9, 21.1, 22.0]),
+        ]
+    }
+
+    result = compute_snr_statistics(all_group_data)
+
+    # 打印结果
+    for group_id, stats in result.items():
+        print(f"\nGroup {group_id}:")
+        for key, value in stats.items():
+            print(f"  {key}: {value}")
