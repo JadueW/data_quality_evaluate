@@ -121,7 +121,7 @@ class Visualizer:
         total = len(all_ch_check_mask)
         good = sum(all_ch_check_mask)
         bad = total - good
-        ax.set_title(f'Electrode Topology: {good}/{total} Good ({100 * good / total:.1f}%)',
+        ax.set_title(f'Electrode Topology',
                      fontsize=12, pad=10)
 
         plt.tight_layout()

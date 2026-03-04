@@ -77,9 +77,9 @@ if __name__ == '__main__':
             # TODO 4.2.2 对每个窗口进行统计
 
             # 4.3 计算line_noise
-            if not is_detect_line_noise:
-                line_noise = handle_line_noise_detection(datasets)
-                is_detect_line_noise = True
+            # if not is_detect_line_noise:
+            #     line_noise = handle_line_noise_detection(datasets)
+            #     is_detect_line_noise = True
 
     except StopIteration as e:
         print("数据质量评估【预处理和统计分析】完成")
@@ -93,7 +93,6 @@ if __name__ == '__main__':
 
 
     # 5.1 生成绘图所需要的数据
-    # elec_topo = erf.all_ch_check_mask
     all_group_ch_win_means = erf.compute_ch_win_mean()
     all_group_ch_win_std = erf.compute_ch_win_std()
     print("数据质量评估【生成绘图所需数据】完成")
@@ -107,12 +106,10 @@ if __name__ == '__main__':
         total_ch, bad_ch, bad_ratio, valid_length, elec_topo = erf._compute_win_ch(group_id)
 
         # 计算当前group的数据大小
-        # 注意：timepoints 是单个批次的数据长度，需要根据总窗口数调整
         total_windows = len(all_group_statistics_data[group_id]['all_win_check_mask'])
         total_samples = timepoints * total_windows
         total_channels = report_data['total_ch']
 
-        # 估算数据大小（float64: 8 bytes per value）
         estimated_data_size_bytes = total_samples * total_channels * 8
         data_size_kb = estimated_data_size_bytes / 1024
         data_size_mb = data_size_kb / 1024
@@ -181,12 +178,18 @@ if __name__ == '__main__':
             save_path=os.path.join(output_dir, f"signal_trends_std_group{group_id}.png")
         )
 
-        # 6.3 创建 PDF 报告生成器实例
-        pdf_generator = PDFReportGenerator(
-            output_dir=output_dir,
-            pdf_name=f"data_quality_report_group{group_id}.pdf"
+        # 6.3 生成电极拓扑图
+        Visualizer.plot_electrode_topology_mask(
+            elec_topo,
+            save_path=os.path.join(output_dir, f"elec_mapping_group{group_id}.png")
         )
 
-        # 6.4 生成 PDF 报告
-        pdf_generator.build_report(results=pdf_results)
-        print(f"报告已生成: {os.path.join(output_dir, f'data_quality_report_group{group_id}.pdf')}")
+        # # 6.3 创建 PDF 报告生成器实例
+        # pdf_generator = PDFReportGenerator(
+        #     output_dir=output_dir,
+        #     pdf_name=f"data_quality_report_group{group_id}.pdf"
+        # )
+        #
+        # # 6.4 生成 PDF 报告
+        # pdf_generator.build_report(results=pdf_results)
+        # print(f"报告已生成: {os.path.join(output_dir, f'data_quality_report_group{group_id}.pdf')}")
