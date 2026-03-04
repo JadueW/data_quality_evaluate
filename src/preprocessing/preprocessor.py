@@ -9,6 +9,7 @@ from mne.filter import filter_data
 
 
 class Preprocessor:
+    notch_harmonics = [50, 100, 150, 200]
     def __init__(self, raw_data):
         self.raw_data = raw_data
         self.group_ch_num = None
@@ -17,7 +18,7 @@ class Preprocessor:
         self.resample_fs = None
         if not self.fs:
             raise AssertionError("未获取到采样频率fs")
-        self.harmonics = [50, 100, 150, 200]
+        self.harmonics = Preprocessor.notch_harmonics
         self.ch_check_mask = None
 
     def group(self, **kwargs):
