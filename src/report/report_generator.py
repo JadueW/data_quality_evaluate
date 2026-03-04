@@ -5,6 +5,55 @@ from reportlab.lib import colors
 from reportlab.lib.units import cm, mm
 from reportlab.platypus import Paragraph, Spacer, Table, TableStyle
 
+# ── 默认占位数据（接口数据未传入时使用）────────────────────────────
+_DEFAULTS = {
+    # 结论
+    'valid_length':   0.0,
+    'line_noise':     ['50Hz', '100Hz'],
+    'bad_ch':         0,
+    'total_ch':       128,
+    'bad_ratio':      0.0,
+    # 幅度统计（嵌套 dict，与 ExtractReportFeatures.report_data 结构一致）
+    'amp': {
+        'min': -5064.88, 'max': 5444.50, 'avg': -0.00,
+        'median': 0.13,  'variability': 28.37,
+        '1%': 0.0, '5%': -33.73, '95%': 33.11, '99%': 0.0,
+    },
+    # 标准差统计（嵌套）
+    'std': {
+        'min': -5064.88, 'max': 5444.50, 'avg': -0.00,
+        'median': 0.13,  'variability': 28.37,
+        '1%': 0.0, '5%': -33.73, '95%': 33.11, '99%': 0.0,
+    },
+    # SNR 统计（嵌套）
+    'snr_range': {
+        'min': 20.30, 'max': 22.23, 'avg': 20.95,
+        'median': 20.92, 'variability': 0.51,
+        'p5-p95': '20.41 - 22.07',
+    },
+    # 阻抗（嵌套）
+    'impedence_range': {
+        'min': 0.0, 'max': 1000000.0, 'avg': 500000.0,
+    },
+    # 电极图
+    'bad_channels':      [],
+    # 数据采集摘要
+    'sample_rate':       2000.0,
+    'n_channels':        128,
+    'duration':          673.34,
+    'data_kb':           1346688.0,
+    'data_mb':           1315.12,
+    # 工频干扰（每行：[频率, 通道计数, 干扰通道描述]）
+    'powerline_table': [
+        ['50 Hz',  '127', '1, 10, 100, 101, 102, 103, 104, 105'],
+        ['100 Hz', '127', '1, 10, 100, 101, 102, 103, 104'],
+        ['150 Hz', '94',  '10, 100, 101, 103, 106, 11'],
+    ],
+    # 预处理参数
+    'notch_freqs': '50Hz, 100Hz, 150Hz, 200Hz',
+    'bandpass':    '1-200 Hz',
+    'avg_ref':     '是',
+}
 
 class PDFReportGenerator:
     def __init__(self, output_dir, pdf_name="data_quality_report.pdf"):
@@ -97,24 +146,66 @@ class PDFReportGenerator:
         ))
         return styles
 
-    # ── 取值辅助：接口数据必须包含所需字段，否则抛出错误 ────────────────
-    def _get(self, results, key):
-        if results is None:
-            raise ValueError(f"results 未传入，无法获取字段 '{key}'")
-        if key not in results:
-            raise KeyError(f"results 中缺少必要字段 '{key}'")
-        return results[key]
+    # ── 取值辅助：优先用 results，缺省用占位符 ───────────────────────────
+    def _get(self, results, key, format_str=None):
+        """
+        从 results 获取值，支持格式化
+        format_str: 格式化字符串，如 ':.2f' 或 '.2f' 均可
+        """
+        # 尝试从 results 获取
+        if results and key in results:
+            val = results[key]
+            if format_str and isinstance(val, (int, float)):
+                # 修复：去除可能的前导冒号
+                clean_fmt = format_str[1:] if format_str.startswith(':') else format_str
+                return format(val, clean_fmt)
+            return val
 
-    def _gn(self, results, outer, inner):
-        """从嵌套 dict 取值，接口数据必须包含所需字段，否则抛出错误"""
-        if results is None:
-            raise ValueError(f"results 未传入，无法获取 '{outer}.{inner}'")
-        if outer not in results:
-            raise KeyError(f"results 中缺少必要字段 '{outer}'")
-        outer_val = results[outer]
-        if inner not in outer_val:
-            raise KeyError(f"results['{outer}'] 中缺少必要字段 '{inner}'")
-        return outer_val[inner]
+        # 从 _DEFAULTS 获取
+        val = _DEFAULTS[key]
+        if format_str and isinstance(val, (int, float)):
+            clean_fmt = format_str[1:] if format_str.startswith(':') else format_str
+            return format(val, clean_fmt)
+        return val
+
+    def _gn(self, results, outer, inner, format_str=None):
+        """
+        从嵌套 dict 取值，支持格式化
+        format_str: 格式化字符串，如 ':.2f' 或 '.2f' 均可
+        """
+        # 尝试从 results 获取
+        outer_val = results.get(outer, {}) if results else {}
+        if inner in outer_val:
+            val = outer_val[inner]
+            if format_str and isinstance(val, (int, float)):
+                clean_fmt = format_str[1:] if format_str.startswith(':') else format_str
+                return format(val, clean_fmt)
+            return val
+
+        # 从 _DEFAULTS 获取
+        val = _DEFAULTS[outer][inner]
+        if format_str and isinstance(val, (int, float)):
+            clean_fmt = format_str[1:] if format_str.startswith(':') else format_str
+            return format(val, clean_fmt)
+        return val
+
+    def _format_range(self, results, outer, min_key='min', max_key='max', unit='', fmt=':.2f'):
+        """格式化范围值，如 [min, max]"""
+        min_val = self._gn(results, outer, min_key, fmt)
+        max_val = self._gn(results, outer, max_key, fmt)
+        return f"[{min_val}, {max_val}]{unit}"
+
+    def _format_percentile(self, results, outer, p1='1%', p99='99%', fmt=':.2f'):
+        """格式化百分位范围，如 p1 – p99"""
+        p1_val = self._gn(results, outer, p1, fmt)
+        p99_val = self._gn(results, outer, p99, fmt)
+        return f"{p1_val} – {p99_val}"
+
+    def _format_list(self, items):
+        """格式化列表为字符串，如 ['50Hz', '100Hz'] -> '50Hz, 100Hz'"""
+        if isinstance(items, list):
+            return ', '.join(str(item) for item in items)
+        return str(items)
 
     # ── 中英混排：非 CJK 字符用 Times New Roman，CJK 保持仿宋 ──────────
     def _mix_fonts(self, text):
@@ -140,25 +231,33 @@ class PDFReportGenerator:
     # 第1页：结论 + 电极拓扑图 + 脚注¹~⁷
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     def _add_conclusion(self, r):
-        g  = lambda k:    self._get(r, k)
-        gn = lambda o, i: self._gn(r, o, i)
-        amp_range  = "[" + str(gn('amp', 'min'))             + ", " + str(gn('amp', 'max'))             + "]"
-        amp_p1_p99 = str(gn('amp', '1%'))  + " – " + str(gn('amp', '99%'))
-        amp_p5_p95 = str(gn('amp', '5%'))  + " – " + str(gn('amp', '95%'))
-        std_range  = "[" + str(gn('std', 'min'))             + ", " + str(gn('std', 'max'))             + "]"
-        std_p1_p99 = str(gn('std', '1%'))  + " – " + str(gn('std', '99%'))
-        std_p5_p95 = str(gn('std', '5%'))  + " – " + str(gn('std', '95%'))
-        snr_range  = "[" + str(gn('snr_range', 'min'))       + ", " + str(gn('snr_range', 'max'))       + "]"
-        imp_range  = "[" + str(gn('impedence_range', 'min')) + ", " + str(gn('impedence_range', 'max')) + "]"
+        g  = lambda k, fmt='': self._get(r, k, fmt)
+        gn = lambda o, i, fmt='': self._gn(r, o, i, fmt)
+
+        amp_range  = self._format_range(r, 'amp', unit='uV')
+        amp_p1_p99 = self._format_percentile(r, 'amp', '1%', '99%') + 'uV'
+        amp_p5_p95 = self._format_percentile(r, 'amp', '5%', '95%') + 'uV'
+        std_range  = self._format_range(r, 'std', unit='uV')
+        std_p1_p99 = self._format_percentile(r, 'std', '1%', '99%') + 'uV'
+        std_p5_p95 = self._format_percentile(r, 'std', '5%', '95%') + 'uV'
+        snr_range  = self._format_range(r, 'snr_range', unit='dB')
+        imp_range  = self._format_range(r, 'impedence_range', unit='ohm')
+
+        line_noise_val = self._get(r, 'line_noise', '')
+        if isinstance(line_noise_val, list):
+            line_noise_str = ', '.join(str(x) for x in line_noise_val)
+        else:
+            line_noise_str = str(line_noise_val)
+
         self.story.append(Paragraph("结论<font size=10><super>1</super></font>：", self.styles['Section']))
         lines = [
-            "信号有效时长<font size=8><super>2</super></font>：---s（" + str(g('valid_length')) + "%）；",
-            "工频噪声：[" + str(g('line_noise')) + "]；",
-            "坏道数/总数<font size=8><super>3</super></font>（百分比）：" + str(g('bad_ch')) + "/" + str(g('total_ch')) + "（" + str(g('bad_ratio')) + "%）；",
-            "幅度分布范围<font size=8><super>4</super></font>：" + amp_range + "uV；1%-99%区间范围：<u>" + amp_p1_p99 + "uV</u>；5%-95%区间范围：<u>" + amp_p5_p95 + "uV</u>；",
-            "标准差分布范围：" + std_range + "uV；1%-99%区间范围：<u>" + std_p1_p99 + "uV</u>；5%-95%区间范围：<u>" + std_p5_p95 + "uV</u>；",
-            "信噪比分布范围<font size=8><super>5</super></font>：" + snr_range + "dB；",
-            "阻抗分布范围<font size=8><super>6</super></font>：" + imp_range + "ohm。",
+            f"信号有效时长<font size=8><super>2</super></font>：---s（{g('valid_length', ':.2f')}%）；",
+            f"工频噪声：[{line_noise_str}]；",
+            f"坏道数/总数<font size=8><super>3</super></font>（百分比）：{g('bad_ch')}/{g('total_ch')}（{g('bad_ratio', ':.2f')}%）；",
+            f"幅度分布范围<font size=8><super>4</super></font>：{amp_range}；1%-99%区间范围：<u>{amp_p1_p99}</u>；5%-95%区间范围：<u>{amp_p5_p95}</u>；",
+            f"标准差分布范围：{std_range}；1%-99%区间范围：<u>{std_p1_p99}</u>；5%-95%区间范围：<u>{std_p5_p95}</u>；",
+            f"信噪比分布范围<font size=8><super>5</super></font>：{snr_range}；",
+            f"阻抗分布范围<font size=8><super>6</super></font>：{imp_range}。",
             "分析拓扑<font size=8><super>7</super></font>：",
         ]
         for line in lines:
@@ -227,14 +326,14 @@ class PDFReportGenerator:
     # 第2页：数据采集摘要 / 工频干扰 / 预处理参数 / 幅度统计
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     def _add_summary_table(self, r):
-        g = lambda k: self._get(r, k)
+        g = lambda k, fmt='': self._get(r, k, fmt)
         data = [
             ["项目",          "数值"],
-            ["采样率",        g('sample_rate')],
+            ["采样率",        f"{g('sample_rate')} Hz"],
             ["通道数",        str(g('n_channels'))],
-            ["记录时长",      g('duration')],
-            ["数据大小 (KB)", g('data_kb')],
-            ["数据大小 (MB)", g('data_mb')],
+            ["记录时长",      f"{g('duration', ':.2f')} 秒"],
+            ["数据大小 (KB)", f"{g('data_kb', ':,.2f')}"],
+            ["数据大小 (MB)", f"{g('data_mb', ':,.2f')}"],
         ]
         self._add_table("数据采集摘要：", data, [6*cm, 10*cm])
 
@@ -281,16 +380,17 @@ class PDFReportGenerator:
         self._add_table("预处理参数：", data, [5.5*cm, 10.5*cm])
 
     def _add_amp_table(self, r):
-        gn = lambda i: self._gn(r, 'amp', i)
+        gn = lambda i, fmt='': self._gn(r, 'amp', i, fmt)
+        p5 = gn('5%', ':.2f')
+        p95 = gn('95%', ':.2f')
         data = [
             ["统计量",  "数值 (μV)"],
-            ["最小值",  gn('min')],
-            ["最大值",  gn('max')],
-            ["均值",    gn('avg')],
-            ["中位数",  gn('median')],
-            ["变异性",  gn('variability')],
-            ["5%-95%", str(gn('5%')) + " – " + str(gn('95%'))],
-            ["1%-99%", str(gn('1%')) + " – " + str(gn('99%'))],
+            ["最小值",  gn('min', ':.2f')],
+            ["最大值",  gn('max', ':.2f')],
+            ["均值",    gn('avg', ':.2f')],
+            ["中位数",  gn('median', ':.2f')],
+            ["变异性",  gn('variability', ':.2f')],
+            ["5%-95%", f"{p5} – {p95}"],
         ]
         self._add_table("幅度统计：", data, [8*cm, 8*cm])
 
@@ -298,30 +398,32 @@ class PDFReportGenerator:
     # 第3页：标准差统计 / SNR统计 / 趋势图1 + 脚注⁸
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     def _add_std_table(self, r):
-        gn = lambda i: self._gn(r, 'std', i)
+        gn = lambda i, fmt='': self._gn(r, 'std', i, fmt)
+        p5 = gn('5%', ':.2f')
+        p95 = gn('95%', ':.2f')
         data = [
             ["统计量",  "数值 (μV)"],
-            ["最小值",  gn('min')],
-            ["最大值",  gn('max')],
-            ["均值",    gn('avg')],
-            ["中位数",  gn('median')],
-            ["变异性",  gn('variability')],
-            ["5%-95%", str(gn('5%')) + " – " + str(gn('95%'))],
-            ["1%-99%", str(gn('1%')) + " – " + str(gn('99%'))],
+            ["最小值",  gn('min', ':.2f')],
+            ["最大值",  gn('max', ':.2f')],
+            ["均值",    gn('avg', ':.2f')],
+            ["中位数",  gn('median', ':.2f')],
+            ["变异性",  gn('variability', ':.2f')],
+            ["5%-95%", f"{p5} – {p95}"],
         ]
         self._add_table("标准差统计：", data, [8*cm, 8*cm])
 
     def _add_snr_table(self, r):
-        gn = lambda i: self._gn(r, 'snr_range', i)
+        gn = lambda i, fmt='': self._gn(r, 'snr_range', i, fmt)
+        # 注意：snr_range 中的键名是 'p5-p95' 而不是 '5%' 和 '95%'
+        p5_p95 = self._get(r.get('snr_range', {}), 'p5-p95', '')
         data = [
             ["统计量",  "数值 (dB)"],
-            ["最小值",  gn('min')],
-            ["最大值",  gn('max')],
-            ["均值",    gn('avg')],
-            ["中位数",  gn('median')],
-            ["变异性",  gn('variability')],
-            ["5%-95%", str(gn('5%')) + " – " + str(gn('95%'))],
-            ["1%-99%", str(gn('1%')) + " – " + str(gn('99%'))],
+            ["最小值",  gn('min', ':.2f')],
+            ["最大值",  gn('max', ':.2f')],
+            ["均值",    gn('avg', ':.2f')],
+            ["中位数",  gn('median', ':.2f')],
+            ["变异性",  gn('variability', ':.2f')],
+            ["5%-95%", str(p5_p95)],
         ]
         self._add_table("SNR 统计：", data, [8*cm, 8*cm])
 
@@ -401,18 +503,15 @@ class PDFReportGenerator:
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     # 多组支持：add_group + finalize
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    def add_group(self, group_id, results):
+    def add_group(self, group_id, results=None):
         """将一个分组的全部内容追加到 story（支持多组拼接到同一 PDF）。
         调用完所有 add_group 后，需调用 finalize() 生成 PDF。
-        results 必须传入，且包含所有必要字段。
         """
         from reportlab.platypus import PageBreak, KeepTogether
         from reportlab.platypus.flowables import HRFlowable
 
-        if not results:
-            raise ValueError(f"group_id={group_id} 的 results 未传入或为空")
-        r = results
-        bad_ch = set(r['bad_channels'])
+        r = results or {}
+        bad_ch = set(r.get('bad_channels', _DEFAULTS['bad_channels']))
 
         # ── 第1页 ────────────────────────────────────────────
         self._add_conclusion(r)
@@ -470,6 +569,15 @@ class PDFReportGenerator:
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     # 单组兼容入口（等价于 add_group(0) + finalize()）
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    def build_report(self, results):
+    def build_report(self, results=None):
         self.add_group(group_id=0, results=results)
         self.finalize()
+
+if __name__ == "__main__":
+    # ── 测试：用占位符生成 ────────────────────────────────────
+    import os
+    output_dir = "../../results/小黑20260114第二只001对照组"
+    os.makedirs(output_dir, exist_ok=True)
+    gen = PDFReportGenerator(output_dir)
+    gen.build_report()
+    
