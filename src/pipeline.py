@@ -97,6 +97,12 @@ if __name__ == '__main__':
     all_group_ch_win_std = erf.compute_ch_win_std()
     print("数据质量评估【生成绘图所需数据】完成")
 
+    # 6. 创建 PDF 报告生成器实例（所有组共用同一个 PDF）
+    pdf_generator = PDFReportGenerator(
+        output_dir=output_dir,
+        pdf_name="data_quality_report.pdf"
+    )
+
     # 根据report_data的group_id来决定生成几个report
     for group_id, report_data in all_report_data.items():
 
@@ -158,7 +164,7 @@ if __name__ == '__main__':
             'data_kb': f"{data_size_kb:,.2f}",
             'data_mb': f"{data_size_mb:,.2f}",
 
-            # 'electrode_map_image': os.path.join(output_dir, f"elec_mapping_group{group_id}.png"),
+            'electrode_map_image': os.path.join(output_dir, f"elec_mapping_group{group_id}.png"),
             'trend1_image': trend1_image,
             'trend2_image': trend2_image,
             'bad_channels': bad_channels_list
@@ -184,12 +190,9 @@ if __name__ == '__main__':
             save_path=os.path.join(output_dir, f"elec_mapping_group{group_id}.png")
         )
 
-        # # 6.3 创建 PDF 报告生成器实例
-        # pdf_generator = PDFReportGenerator(
-        #     output_dir=output_dir,
-        #     pdf_name=f"data_quality_report_group{group_id}.pdf"
-        # )
-        #
-        # # 6.4 生成 PDF 报告
-        # pdf_generator.build_report(results=pdf_results)
-        # print(f"报告已生成: {os.path.join(output_dir, f'data_quality_report_group{group_id}.pdf')}")
+        # 6.4 将当前 group 内容追加到报告
+        pdf_generator.add_group(group_id, pdf_results)
+        print(f"Group {group_id} 内容已追加到报告")
+
+    # 6.5 所有 group 追加完毕，生成最终 PDF
+    pdf_generator.finalize()

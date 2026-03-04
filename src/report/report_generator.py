@@ -220,7 +220,7 @@ class PDFReportGenerator:
         image_source: 外部传入的电极图，支持：
           - 文件路径字符串，如 '/path/to/electrode.png'
           - BytesIO 对象（matplotlib savefig 输出）
-          - None → 内部用 bad_channels 自动生成占位图，并保存至 output_dir/elec_mapping.png
+          - None → 内部用 bad_channels 自动生成占位图（仅在内存中，不落盘）
         """
         import os
         from reportlab.platypus import Image
@@ -246,8 +246,6 @@ class PDFReportGenerator:
                         edgecolors='gray' if is_bad else 'darkgreen',
                         linewidth=0.8,
                     )
-            save_path = os.path.join(self.output_dir, "elec_mapping.png")
-            plt.savefig(save_path, format='png', bbox_inches='tight', dpi=160, transparent=True)
             buf = BytesIO()
             plt.savefig(buf, format='png', bbox_inches='tight', dpi=160, transparent=True)
             buf.seek(0)
@@ -448,10 +446,12 @@ class PDFReportGenerator:
         self.story.append(Spacer(1, 5*mm))
 
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    # 主入口
+    # 多组支持：add_group + finalize
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    def build_report(self, results=None):
-
+    def add_group(self, group_id, results=None):
+        """将一个分组的全部内容追加到 story（支持多组拼接到同一 PDF）。
+        调用完所有 add_group 后，需调用 finalize() 生成 PDF。
+        """
         from reportlab.platypus import PageBreak, KeepTogether
         from reportlab.platypus.flowables import HRFlowable
 
@@ -483,7 +483,7 @@ class PDFReportGenerator:
             self._make_trend_elements(
                 "信号变化趋势 1（均值）<font size=10><super>8</super></font>",
                 image_source=r.get('trend1_image'),
-                png_name="signal_trends_mean.png",
+                png_name=f"signal_trends_mean_group{group_id}.png",
             ) + [
                 Spacer(1, 3*mm),
                 HRFlowable(width=6*cm, thickness=0.5, color=colors.black, hAlign='LEFT'),
@@ -494,10 +494,29 @@ class PDFReportGenerator:
         self.story.append(PageBreak())
 
         # ── 第4页 ────────────────────────────────────────────
-        self.add_trend_plot("信号变化趋势 2（标准差）", image_source=r.get('trend2_image'), png_name="signal_trends_std.png")
+        self.add_trend_plot(
+            "信号变化趋势 2（标准差）",
+            image_source=r.get('trend2_image'),
+            png_name=f"signal_trends_std_group{group_id}.png",
+        )
 
+        # 组间分页：下一组从新页开始；finalize() 会移除最后多余的 PageBreak
+        self.story.append(PageBreak())
+
+    def finalize(self):
+        """所有组追加完毕后调用，移除末尾多余 PageBreak 并生成 PDF。"""
+        from reportlab.platypus import PageBreak
+        while self.story and isinstance(self.story[-1], PageBreak):
+            self.story.pop()
         self.doc.build(self.story)
         print("报告已生成：" + self.output_path)
+
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    # 单组兼容入口（等价于 add_group(0) + finalize()）
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    def build_report(self, results=None):
+        self.add_group(group_id=0, results=results)
+        self.finalize()
 
 if __name__ == "__main__":
     # ── 测试：用占位符生成 ────────────────────────────────────
