@@ -75,7 +75,7 @@ class DataParse(FileProcess):
         with open(os.path.join(self.file_dir, mapping_file), 'r', encoding="utf-8") as f:
             content = f.read()
 
-        result['mapping'] = np.array([int(x.strip()) for x in content.replace('\n', ',').split(',') if x.strip()])[:3]
+        result['mapping'] = np.loadtxt(os.path.join(self.file_dir, mapping_file),dtype=int,delimiter=",")
 
         return result
 
