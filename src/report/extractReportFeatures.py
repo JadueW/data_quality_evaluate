@@ -28,18 +28,17 @@ class ExtractReportFeatures:
         self.all_group_statistics_data = all_group_statistics_data
         self.impedence_range = impedence
 
-        total_ch, bad_ch, bad_ratio, valid_length,all_ch_check_mask = self._compute_win_ch()
+
+    def _create_report_data_template(self):
+        """创建 report_data 的模板结构"""
         min_val, max_val, avg_val = self._compute_impedence_range()
 
-        self.all_ch_check_mask = all_ch_check_mask
-
-        # 需要计算的结果
-        self.report_data = {
-            "valid_length": valid_length,
+        return {
+            "valid_length": 0.0,  # 在后续计算中填充
             "line_noise": 0.0,
-            "bad_ch": bad_ch,
-            "total_ch": total_ch,
-            "bad_ratio": bad_ratio,
+            "bad_ch": 0,          # 在后续计算中填充
+            "total_ch": 0,        # 在后续计算中填充
+            "bad_ratio": 0.0,     # 在后续计算中填充
             "amp":{
                 "min": 0.0,
                 "max": 0.0,
@@ -73,13 +72,11 @@ class ExtractReportFeatures:
                 "95%": 0.0,
                 "99": 0.0
             },
-
             "snr_range":{
                 "min": 0.0,
                 "max": 0.0,
                 "avg": 0.0
             },
-
             "impedence_range":{
                 "min": min_val,
                 "max": max_val,
@@ -93,14 +90,16 @@ class ExtractReportFeatures:
         avg_val = np.mean(impedence_range)
         return min_val, max_val, avg_val
 
-    def _compute_win_ch(self):
-        # 获取电极拓扑的分布情况（不同channel的True，False）
-        all_ch_check_mask = []
-        all_win_check_mask = []
-        for group_id, group_values in self.all_group_statistics_data.items():
-            all_ch_check_mask = self.all_group_statistics_data[group_id]["all_ch_check_mask"]
-            all_win_check_mask = self.all_group_statistics_data[group_id]['all_win_check_mask']
-            break
+    def _compute_win_ch(self, group_id):
+        """
+        计算指定 group_id 的通道和窗口统计信息
+
+        :param group_id: 要计算的 group_id
+        :return: total_ch, bad_ch, bad_ratio, valid_length, all_ch_check_mask
+        """
+        group_values = self.all_group_statistics_data[group_id]
+        all_ch_check_mask = group_values["all_ch_check_mask"]
+        all_win_check_mask = group_values['all_win_check_mask']
 
         total_ch, bad_ch, bad_ratio = 0, 0, 0.0
         for ch in all_ch_check_mask:
@@ -109,16 +108,13 @@ class ExtractReportFeatures:
                 bad_ch += 1
             else:
                 continue
-        bad_ratio = bad_ch / total_ch
+        bad_ratio = bad_ch / total_ch if total_ch > 0 else 0.0
 
         # 获取有效窗口数量
-        valid_win = 0
-        for ch in all_win_check_mask:
-            if ch:
-                valid_win += 1
+        valid_win = sum(1 for is_good in all_win_check_mask if is_good)
         valid_length = valid_win * self.timepoints / self.fs  # 单位：时间 s
 
-        return total_ch, bad_ch, bad_ratio, valid_length,all_ch_check_mask
+        return total_ch, bad_ch, bad_ratio, valid_length, all_ch_check_mask
 
     def _compute_cross_win(self):
         """
@@ -186,37 +182,54 @@ class ExtractReportFeatures:
         return all_group_values
 
     def generate_report_statistics(self):
+        """
+        为每个 group_id 生成独立的统计报告
+        :return: 字典 {group_id: report_data}
+        """
         all_group_values = self._compute_report_statistics()
 
-        all_amps, all_means, all_stds = [], [], []
+        all_report_data = {}
 
+        # 为每个 group_id 生成独立的 report_data
         for group_id, (amps, means, stds) in all_group_values.items():
-            all_amps.extend(amps)
-            all_means.extend(means)
-            all_stds.extend(stds)
+            # 创建该 group 的 report_data 模板
+            report_data = self._create_report_data_template()
 
-        # 转换为 numpy 数组
-        amps = np.array(all_amps)
-        means = np.array(all_means)
-        stds = np.array(all_stds)
+            # 计算该 group 的通道和窗口统计信息
+            total_ch, bad_ch, bad_ratio, valid_length, all_ch_check_mask = self._compute_win_ch(group_id)
 
-        for metric_name, values in [("amp", amps), ("mean", means), ("std", stds)]:
-            if len(values) == 0:
-                continue
+            # 填充基本信息
+            report_data["valid_length"] = valid_length
+            report_data["bad_ch"] = bad_ch
+            report_data["total_ch"] = total_ch
+            report_data["bad_ratio"] = bad_ratio
 
-            self.report_data[metric_name].update({
-                "min": float(np.min(values)),
-                "max": float(np.max(values)),
-                "avg": float(np.mean(values)),
-                "median": float(np.median(values)),
-                "variability": float(np.std(values)),
-                "1%": float(np.percentile(values, 1)),
-                "5%": float(np.percentile(values, 5)),
-                "95%": float(np.percentile(values, 95)),
-                "99%": float(np.percentile(values, 99))
-            })
+            # 转换为 numpy 数组并计算统计量
+            amps_array = np.array(amps) if len(amps) > 0 else np.array([])
+            means_array = np.array(means) if len(means) > 0 else np.array([])
+            stds_array = np.array(stds) if len(stds) > 0 else np.array([])
 
-        return self.report_data
+            # 计算幅度、均值、标准差的统计量
+            for metric_name, values in [("amp", amps_array), ("mean", means_array), ("std", stds_array)]:
+                if len(values) == 0:
+                    continue
+
+                report_data[metric_name].update({
+                    "min": float(np.min(values)),
+                    "max": float(np.max(values)),
+                    "avg": float(np.mean(values)),
+                    "median": float(np.median(values)),
+                    "variability": float(np.std(values)),
+                    "1%": float(np.percentile(values, 1)),
+                    "5%": float(np.percentile(values, 5)),
+                    "95%": float(np.percentile(values, 95)),
+                    "99": float(np.percentile(values, 99))
+                })
+
+            # 保存到结果字典
+            all_report_data[group_id] = report_data
+
+        return all_report_data
 
     def compute_ch_win_mean(self):
         """

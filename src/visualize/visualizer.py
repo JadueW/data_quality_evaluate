@@ -33,7 +33,7 @@ class Visualizer:
         ax.set_yticklabels([f'Ch{i}' for i in range(n_channels)])
 
         plt.tight_layout()
-        plt.savefig(kwargs.get('save_path',{"./ChannelMeanTrendsOverWindows.png"}),dpi=600)
+        plt.savefig(kwargs.get('save_path',"./signal_trends_mean.png"),dpi=600)
 
         return fig
 
@@ -42,15 +42,15 @@ class Visualizer:
         if group_id is None:
             group_id = list(all_group_ch_win_std.keys())[0]
 
-        ch_win_means = all_group_ch_win_std[group_id]
-        n_channels = len(ch_win_means)
-        n_windows = len(ch_win_means[0])
+        ch_win_std = all_group_ch_win_std[group_id]
+        n_channels = len(ch_win_std)
+        n_windows = len(ch_win_std[0])
 
         fig, ax = plt.subplots(figsize=(12, 8))
 
         for ch_idx in range(n_channels):
-            means = np.array(ch_win_means[ch_idx])
-            offset_values = means + ch_idx * offset
+            std = np.array(ch_win_std[ch_idx])
+            offset_values = std + ch_idx * offset
             ax.plot(range(n_windows), offset_values,linewidth=0.8, alpha=0.7)
 
         ax.set_xlabel('Window Index', fontsize=12)
@@ -60,22 +60,26 @@ class Visualizer:
         ax.set_yticklabels([f'Ch{i}' for i in range(n_channels)])
 
         plt.tight_layout()
-        plt.savefig(kwargs.get('save_path',{"./ChannelStdTrendsOverWindows.png"}),dpi=600)
+        plt.savefig(kwargs.get('save_path',"./signal_trends_std.png"),dpi=600)
 
         return fig
 
     @classmethod
-    def plot_electrode_topology_mask(cls,all_ch_check_mask, grid_shape=(16, 8),ch_spacing=1.0, figsize=(6, 8),**kwargs):
+    def plot_electrode_topology_mask(cls,all_ch_check_mask,ch_spacing=1.0, figsize=(6, 8),**kwargs):
         """
-        绘制电极拓扑图，根据 mask 显示通道状态
+        绘制电极拓扑图，根据 all_ch_check_mask 显示通道状态 以及判断 grid_shape
         :param all_ch_check_mask: 通道状态列表，True=好通道(绿色)，False=坏通道(灰色)
-        :param grid_shape: 电极网格形状 (行, 列)，默认16×8
+        :param group_id: 判断数据来源哪个group
         :param ch_spacing: 电极间距
         :param figsize:图像大小
         :return:
         """
 
         n_channels = len(all_ch_check_mask)
+        if n_channels == 128:
+            grid_shape = (16,8)
+        else:
+            grid_shape = (n_channels,1)
         n_rows, n_cols = grid_shape
         if n_channels != n_rows * n_cols:
             raise ValueError(f"通道数 {n_channels} 与网格 {grid_shape} 不匹配")
@@ -117,7 +121,7 @@ class Visualizer:
         total = len(all_ch_check_mask)
         good = sum(all_ch_check_mask)
         bad = total - good
-        ax.set_title(f'Electrode Topology: {good}/{total} Good ({100 * good / total:.1f}%)',
+        ax.set_title(f'Electrode Topology',
                      fontsize=12, pad=10)
 
         plt.tight_layout()

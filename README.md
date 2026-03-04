@@ -110,7 +110,7 @@ pip install -r requirements.txt
 在pipeline.py文件中修改确认数据文件夹、输出路径等位置后
 ```bash
 cd src
-python pipline.py
+python pipeline.py
 ```
 
 ### 4. 查看结果
