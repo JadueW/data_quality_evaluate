@@ -279,6 +279,9 @@ class ExtractReportFeatures:
         for group_id, group_values in self.all_group_statistics_data.items():
             ch_win_std = []
             all_win_tdigest = group_values["all_win_tdigest"]
+            print(f"\n=== compute_ch_win_std: Group {group_id} ===")
+            print(f"通道数: {len(all_win_tdigest)}, 窗口数: {len(all_win_tdigest[0]) if len(all_win_tdigest) > 0 else 0}")
+
             for ch_idx in range(len(all_win_tdigest)):
                 channel_tdigest = all_win_tdigest[ch_idx]
                 channel_std = []
@@ -292,6 +295,14 @@ class ExtractReportFeatures:
                     std_approxy = channel_tdigest[win_idx].percentile(84) - channel_tdigest[win_idx].percentile(16)
                     std_value = np.sqrt(variance_val) if variance_val > 0 else std_approxy
                     channel_std.append(std_value)
+
+                # 打印前3个通道的统计信息
+                if ch_idx < 3:
+                    std_array = np.array(channel_std)
+                    print(f"  通道 {ch_idx}: std 均值={np.mean(std_array):.2f}, "
+                          f"std 标准差={np.std(std_array):.4f}, "
+                          f"范围=[{np.min(std_array):.2f}, {np.max(std_array):.2f}]")
+
                 ch_win_std.append(channel_std)
             all_group_ch_win_std[group_id] = ch_win_std
 

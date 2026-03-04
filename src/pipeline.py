@@ -53,11 +53,14 @@ if __name__ == '__main__':
     last_datasets = None
     SNR_data_dict = None
 
+    # 计算valid_length
+    time_points = 0
+
     # 4. 迭代处理 预处理和统计分析
     try:
         while datasets := next(dataloader):
             last_datasets = datasets
-            timepoints = datasets['data'].shape[1]
+            ds_timepoints = datasets['data'].shape[1]
             fs = datasets['fs']
             impedence = datasets['impedence']
             mapping = datasets['mapping']
@@ -65,6 +68,7 @@ if __name__ == '__main__':
             # 4.1 针对统计指标展开
             # 4.1.1 获取针对统计分析的预处理数据
             preprocessed_data_dict = handle_statistics(datasets)
+            time_points = preprocessed_data_dict[0][0]['processed_data'].shape[1]
 
             # 4.1.2 对于每个窗口的每个组进行统计
             for win_id, win_value in preprocessed_data_dict.items():

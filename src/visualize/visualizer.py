@@ -46,6 +46,17 @@ class Visualizer:
         n_channels = len(ch_win_std)
         n_windows = len(ch_win_std[0])
 
+        # 添加调试信息
+        print(f"\n=== plot_ch_win_std 调试信息 (Group {group_id}) ===")
+        print(f"通道数: {n_channels}, 窗口数: {n_windows}")
+        print(f"数据形状检查:")
+        for ch_idx in range(min(3, n_channels)):  # 只打印前3个通道
+            std_values = np.array(ch_win_std[ch_idx])
+            print(f"  通道 {ch_idx}: 均值={np.mean(std_values):.2f}, "
+                  f"标准差={np.std(std_values):.2f}, "
+                  f"范围=[{np.min(std_values):.2f}, {np.max(std_values):.2f}], "
+                  f"前5个值={std_values[:5]}")
+
         fig, ax = plt.subplots(figsize=(12, 8))
 
         for ch_idx in range(n_channels):
