@@ -33,7 +33,7 @@ class Visualizer:
         ax.set_yticklabels([f'Ch{i}' for i in range(n_channels)])
 
         plt.tight_layout()
-        plt.savefig(kwargs.get('save_path',{"./ChannelMeanTrendsOverWindows.png"}),dpi=600)
+        plt.savefig(kwargs.get('save_path',"./signal_trends_mean.png"),dpi=600)
 
         return fig
 
@@ -42,15 +42,15 @@ class Visualizer:
         if group_id is None:
             group_id = list(all_group_ch_win_std.keys())[0]
 
-        ch_win_means = all_group_ch_win_std[group_id]
-        n_channels = len(ch_win_means)
-        n_windows = len(ch_win_means[0])
+        ch_win_std = all_group_ch_win_std[group_id]
+        n_channels = len(ch_win_std)
+        n_windows = len(ch_win_std[0])
 
         fig, ax = plt.subplots(figsize=(12, 8))
 
         for ch_idx in range(n_channels):
-            means = np.array(ch_win_means[ch_idx])
-            offset_values = means + ch_idx * offset
+            std = np.array(ch_win_std[ch_idx])
+            offset_values = std + ch_idx * offset
             ax.plot(range(n_windows), offset_values,linewidth=0.8, alpha=0.7)
 
         ax.set_xlabel('Window Index', fontsize=12)
@@ -60,7 +60,7 @@ class Visualizer:
         ax.set_yticklabels([f'Ch{i}' for i in range(n_channels)])
 
         plt.tight_layout()
-        plt.savefig(kwargs.get('save_path',{"./ChannelStdTrendsOverWindows.png"}),dpi=600)
+        plt.savefig(kwargs.get('save_path',"./signal_trends_std.png"),dpi=600)
 
         return fig
 
