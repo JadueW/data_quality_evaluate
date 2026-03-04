@@ -72,9 +72,6 @@ class DataParse(FileProcess):
                 break
         if mapping_file is None:
             raise FileNotFoundError(f"未找到映射文件: 文件名需包含'{self.elec_type}'")
-        with open(os.path.join(self.file_dir, mapping_file), 'r', encoding="utf-8") as f:
-            content = f.read()
-
         result['mapping'] = np.loadtxt(os.path.join(self.file_dir, mapping_file),dtype=int,delimiter=",")
 
         return result
