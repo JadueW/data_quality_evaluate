@@ -65,17 +65,21 @@ class Visualizer:
         return fig
 
     @classmethod
-    def plot_electrode_topology_mask(cls,all_ch_check_mask, grid_shape=(16, 8),ch_spacing=1.0, figsize=(6, 8),**kwargs):
+    def plot_electrode_topology_mask(cls,all_ch_check_mask,ch_spacing=1.0, figsize=(6, 8),**kwargs):
         """
-        绘制电极拓扑图，根据 mask 显示通道状态
+        绘制电极拓扑图，根据 all_ch_check_mask 显示通道状态 以及判断 grid_shape
         :param all_ch_check_mask: 通道状态列表，True=好通道(绿色)，False=坏通道(灰色)
-        :param grid_shape: 电极网格形状 (行, 列)，默认16×8
+        :param group_id: 判断数据来源哪个group
         :param ch_spacing: 电极间距
         :param figsize:图像大小
         :return:
         """
 
         n_channels = len(all_ch_check_mask)
+        if n_channels == 128:
+            grid_shape = (16,8)
+        else:
+            grid_shape = (n_channels,1)
         n_rows, n_cols = grid_shape
         if n_channels != n_rows * n_cols:
             raise ValueError(f"通道数 {n_channels} 与网格 {grid_shape} 不匹配")
