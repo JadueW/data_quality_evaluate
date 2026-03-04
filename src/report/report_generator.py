@@ -5,62 +5,6 @@ from reportlab.lib import colors
 from reportlab.lib.units import cm, mm
 from reportlab.platypus import Paragraph, Spacer, Table, TableStyle
 
-# ── 默认占位数据（接口数据未传入时使用）────────────────────────────
-_DEFAULTS = {
-    # 结论
-    'valid_length':   'xx',
-    'line_noise':     '50Hz, 100Hz, ...',
-    'bad_ch':         'xx',
-    'total_ch':       'XX',
-    'bad_ratio':      'xx',
-    # 幅度统计（嵌套 dict，与 ExtractReportFeatures.report_data 结构一致）
-    'amp': {
-        'min': '-5064.88', 'max': '5444.50', 'avg': '-0.00',
-        'median': '0.13',  'variability': '28.37',
-        '1%': 'xx', '5%': '-33.73', '95%': '33.11', '99%': 'xx',
-    },
-    # 标准差统计（嵌套）
-    'std': {
-        'min': '-5064.88', 'max': '5444.50', 'avg': '-0.00',
-        'median': '0.13',  'variability': '28.37',
-        '1%': 'xx', '5%': '-33.73', '95%': '33.11', '99%': 'xx',
-    },
-    # SNR 统计（嵌套）
-    'snr_range': {
-        'min': '20.30', 'max': '22.23', 'avg': '20.95',
-        'median': '20.92', 'variability': '0.51',
-        '5%': '20.41', '95%': '22.07',
-    },
-    # 阻抗（嵌套）
-    'impedence_range': {
-        'min': '0.0', 'max': '0.0', 'avg': '0.0',
-    },
-    # 电极图
-    'bad_channels':      [],
-    # 数据采集摘要
-    'sample_rate':       '2000.0 Hz',
-    'n_channels':        '128',
-    'duration':          '673.34 秒',
-    'data_kb':           '1,346,688.00',
-    'data_mb':           '1,315.12',
-    # 工频干扰（每行：[频率, 通道计数, 干扰通道描述]）
-    'powerline_table': [
-        ['50.0 Hz',  '127', '1, 10, 100, 101, 102, 103, 104, 105'],
-        ['99.9 Hz',  '127', '1, 10, 100, 101, 102, 103, 104'],
-        ['150.1 Hz', '94',  '10, 100, 101, 103, 106, 11'],
-        ['199.9 Hz', '82',  '1, 10, 100, 102, 103, 104'],
-        ['250.0 Hz', '37',  '106, 110, 111, 112, 113'],
-        ['299.8 Hz', '125', '1, 10, 100, 101, 102, 103'],
-        ['350.2 Hz', '126', '1, 10, 100, 101, 102, 103'],
-        ['399.8 Hz', '125', '1, 10, 100, 101, 102, 103, 104'],
-        ['450.0 Hz', '44',  '100, 103, 104, 106, 113, 115'],
-        ['499.7 Hz', '117', '1, 10, 100, 101, 102, 103'],
-    ],
-    # 预处理参数
-    'notch_freqs': '50Hz, 99.9Hz, 150.1Hz, 199.9Hz, 250Hz, 299.8Hz',
-    'bandpass':    '1-200 Hz',
-    'avg_ref':     '是',
-}
 
 class PDFReportGenerator:
     def __init__(self, output_dir, pdf_name="data_quality_report.pdf"):
@@ -153,18 +97,24 @@ class PDFReportGenerator:
         ))
         return styles
 
-    # ── 取值辅助：优先用 results，缺省用占位符 ───────────────────────────
+    # ── 取值辅助：接口数据必须包含所需字段，否则抛出错误 ────────────────
     def _get(self, results, key):
-        if results and key in results:
-            return results[key]
-        return _DEFAULTS[key]
+        if results is None:
+            raise ValueError(f"results 未传入，无法获取字段 '{key}'")
+        if key not in results:
+            raise KeyError(f"results 中缺少必要字段 '{key}'")
+        return results[key]
 
     def _gn(self, results, outer, inner):
-        """从嵌套 dict 取值，优先 results，缺省用 _DEFAULTS"""
-        outer_val = results.get(outer, {}) if results else {}
-        if inner in outer_val:
-            return outer_val[inner]
-        return _DEFAULTS[outer][inner]
+        """从嵌套 dict 取值，接口数据必须包含所需字段，否则抛出错误"""
+        if results is None:
+            raise ValueError(f"results 未传入，无法获取 '{outer}.{inner}'")
+        if outer not in results:
+            raise KeyError(f"results 中缺少必要字段 '{outer}'")
+        outer_val = results[outer]
+        if inner not in outer_val:
+            raise KeyError(f"results['{outer}'] 中缺少必要字段 '{inner}'")
+        return outer_val[inner]
 
     # ── 中英混排：非 CJK 字符用 Times New Roman，CJK 保持仿宋 ──────────
     def _mix_fonts(self, text):
@@ -340,6 +290,7 @@ class PDFReportGenerator:
             ["中位数",  gn('median')],
             ["变异性",  gn('variability')],
             ["5%-95%", str(gn('5%')) + " – " + str(gn('95%'))],
+            ["1%-99%", str(gn('1%')) + " – " + str(gn('99%'))],
         ]
         self._add_table("幅度统计：", data, [8*cm, 8*cm])
 
@@ -356,6 +307,7 @@ class PDFReportGenerator:
             ["中位数",  gn('median')],
             ["变异性",  gn('variability')],
             ["5%-95%", str(gn('5%')) + " – " + str(gn('95%'))],
+            ["1%-99%", str(gn('1%')) + " – " + str(gn('99%'))],
         ]
         self._add_table("标准差统计：", data, [8*cm, 8*cm])
 
@@ -369,6 +321,7 @@ class PDFReportGenerator:
             ["中位数",  gn('median')],
             ["变异性",  gn('variability')],
             ["5%-95%", str(gn('5%')) + " – " + str(gn('95%'))],
+            ["1%-99%", str(gn('1%')) + " – " + str(gn('99%'))],
         ]
         self._add_table("SNR 统计：", data, [8*cm, 8*cm])
 
@@ -448,15 +401,18 @@ class PDFReportGenerator:
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     # 多组支持：add_group + finalize
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    def add_group(self, group_id, results=None):
+    def add_group(self, group_id, results):
         """将一个分组的全部内容追加到 story（支持多组拼接到同一 PDF）。
         调用完所有 add_group 后，需调用 finalize() 生成 PDF。
+        results 必须传入，且包含所有必要字段。
         """
         from reportlab.platypus import PageBreak, KeepTogether
         from reportlab.platypus.flowables import HRFlowable
 
-        r = results or {}
-        bad_ch = set(r.get('bad_channels', _DEFAULTS['bad_channels']))
+        if not results:
+            raise ValueError(f"group_id={group_id} 的 results 未传入或为空")
+        r = results
+        bad_ch = set(r['bad_channels'])
 
         # ── 第1页 ────────────────────────────────────────────
         self._add_conclusion(r)
@@ -514,15 +470,6 @@ class PDFReportGenerator:
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     # 单组兼容入口（等价于 add_group(0) + finalize()）
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    def build_report(self, results=None):
+    def build_report(self, results):
         self.add_group(group_id=0, results=results)
         self.finalize()
-
-if __name__ == "__main__":
-    # ── 测试：用占位符生成 ────────────────────────────────────
-    import os
-    output_dir = "../../results/小黑20260114第二只001对照组"
-    os.makedirs(output_dir, exist_ok=True)
-    gen = PDFReportGenerator(output_dir)
-    gen.build_report()
-    
