@@ -186,8 +186,8 @@ def handle_line_noise_detection(batch_datasets):
     win_size, overlap, wid, s = 1, 0, 0, 0
 
     grouped_line_noise_flag = {}
-    # 对批数据依次分窗处理
-    while True:
+    # 对批数据依次分窗处理，最多处理30次，约30s的数据
+    while wid < 30:
         e = s + int(win_size * batch_datasets["fs"])
         # 判断退出条件
         if e > batch_datasets["data"].shape[1]:
@@ -203,7 +203,7 @@ def handle_line_noise_detection(batch_datasets):
             pse_ch_num=4,
         )
 
-        # 计算每组数据是否OK
+        # 从每组数据中统计
         for k, v in _processed_data.items():
             is_good = v["is_good"]
 
@@ -222,10 +222,69 @@ def handle_line_noise_detection(batch_datasets):
                 del v["processed_data"]
                 grouped_line_noise_flag.update({wid: {k: v}})
 
-        s = e
+        # 修改为更为通道的写法
+        s = s + int((win_size - overlap) * pp.fs)
         wid += 1
 
-    return grouped_line_noise_flag
+    """
+    将line_noise整理为报告需要的格式
+    如果有通道一个line_noise没检测，那么也有可能该通道是坏道
+    如果不同窗口，在相同通道下检测的结果不完全一致，对结果影响也不大
+    在计算line_noise时，使用的是原始数据。
+    """
+    _template = {
+        "win_check_mask": [],
+        "ch_check_mask": [],
+        "line_noise": []
+    }
+    # 重新组织结果
+    grouped_ln = {}
+    for wid in range(len(grouped_line_noise_flag)):
+        wid_line_noise_flag = grouped_line_noise_flag[wid]
+        for gid, g_value in wid_line_noise_flag.items():
+            if gid not in grouped_ln:
+                grouped_ln.update({gid: _template})
+            grouped_ln[gid]["win_check_mask"].append(g_value["is_good"])
+            grouped_ln[gid]["ch_check_mask"].append(g_value["ch_check_mask"])
+            grouped_ln[gid]["line_noise"].append(g_value["line_noise"])
+
+    # 对结果进行统计
+    report_line_noise = {}
+    for gid, all_win_value in grouped_ln.items():
+        if gid not in report_line_noise:
+            report_line_noise.update({gid: {"line_noise": [], "powerline_table": []}})
+
+        valid_win = np.argwhere(all_win_value["win_check_mask"])
+        gid_ch_line_noise = []
+        if valid_win.shape[0]:
+            # 存在有效窗口
+            valid_win_line_noise = all_win_value["line_noise"]
+            # 调整维度 (wid, chid, noise_flag)
+            valid_win_line_noise = np.array(valid_win_line_noise).transpose(1, 0, 2)
+            # 取各通道所有窗口结果
+            for ch in valid_win_line_noise:
+                ch_all_line_noise = valid_win_line_noise[ch, ...]
+                win_num, ln_num = ch_all_line_noise.shape
+                ratio = np.sum(ch_all_line_noise, axis=1) / win_num
+                _temp = np.ones(ln_num, dtype=bool)
+                # 在30个窗口中，小于30%支持当前通道有该噪声的则为False
+                _temp[ratio < 0.3] = False
+                gid_ch_line_noise.append(_temp)
+
+            # 对当前数据做整理，形成报告内容
+            gid_ch_line_noise = np.array(gid_ch_line_noise)
+            ch_num, ln_num = gid_ch_line_noise.shape
+            exit_ln_ch_num = np.sum(gid_ch_line_noise, axis=1)
+            for lnid in range(ln_num):
+                if exit_ln_ch_num[lnid]:
+                    line_noise_name = str((lnid + 1) * 50) + "Hz"
+                    exit_ln_ch = np.argwhere(gid_ch_line_noise[:, lnid]).reshape((-1,)) + 1
+                    report_line_noise[gid]["line_noise"].append(line_noise_name)
+                    report_line_noise[gid]["powerline_table"].append(
+                        [line_noise_name, str(exit_ln_ch_num[lnid]), str(exit_ln_ch)]
+                    )
+
+    return report_line_noise
 
 
 if __name__ == '__main__':
