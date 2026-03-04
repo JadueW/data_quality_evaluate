@@ -8,6 +8,7 @@ from src.analyse import handle_statistics, handle_snr, handle_line_noise_detecti
 from src.data_io.dataParse import DataParse
 from src.metrics.statistics import Statistics
 from src.metrics.statisticsAggregator import StatisticsAggregator
+from src.metrics.calc_snr import SNR_statistics,compute_snr_statistics
 
 from src.report.extractReportFeatures import ExtractReportFeatures
 from src.report.report_generator import PDFReportGenerator
@@ -44,9 +45,11 @@ if __name__ == '__main__':
 
     # line_noise_detect 记录
     is_detect_line_noise = False
+    all_line_noise = None
 
     # 存储数据集用于后续使用
     last_datasets = None
+    SNR_data_dict = None
 
     # 4. 迭代处理 预处理和统计分析
     try:
@@ -55,6 +58,7 @@ if __name__ == '__main__':
             timepoints = datasets['data'].shape[1]
             fs = datasets['fs']
             impedence = datasets['impedence']
+            mapping = datasets['mapping']
 
             # 4.1 针对统计指标展开
             # 4.1.1 获取针对统计分析的预处理数据
@@ -74,17 +78,18 @@ if __name__ == '__main__':
             # 4.2 针对SNR展示
             # 4.2.1 获取指数据各窗口下SNR的计算结果
             SNR_data_dict = handle_snr(datasets)
-            # TODO 4.2.2 对每个窗口进行统计
 
             # 4.3 计算line_noise
-            # if not is_detect_line_noise:
-            #     line_noise = handle_line_noise_detection(datasets)
-            #     is_detect_line_noise = True
+            if not is_detect_line_noise:
+                all_line_noise = handle_line_noise_detection(datasets)
+                is_detect_line_noise = True
 
     except StopIteration as e:
         print("数据质量评估【预处理和统计分析】完成")
 
     all_group_statistics_data = aggregator.aggregation_all_statistics_data(all_statistics)
+    all_group_data = SNR_statistics(SNR_data_dict)
+    snr_group_statistics = compute_snr_statistics(all_group_data)
 
     # 5. 计算指定指标，形成report_data数据接口
     erf = ExtractReportFeatures(all_group_statistics_data, timepoints, fs, impedence)
@@ -110,6 +115,8 @@ if __name__ == '__main__':
         # 6.1 准备报告数据字典
         # 获取当前group的通道和窗口统计信息
         total_ch, bad_ch, bad_ratio, valid_length, elec_topo = erf._compute_win_ch(group_id)
+        snr_group_statistic = snr_group_statistics[group_id]
+        group_line_noise = all_line_noise[group_id]
 
         # 计算当前group的数据大小
         total_windows = len(all_group_statistics_data[group_id]['all_win_check_mask'])
@@ -131,7 +138,7 @@ if __name__ == '__main__':
 
         pdf_results = {
             'valid_length': f"{valid_length_sec:.2f}",
-            'line_noise': "50, 100, 150, 200 Hz",
+            'line_noise': f"{group_line_noise['line_noise']}",
             'bad_ch': report_data['bad_ch'],
             'total_ch': report_data['total_ch'],
             'bad_ratio': f"{report_data['bad_ratio'] * 100:.2f}",
@@ -156,6 +163,13 @@ if __name__ == '__main__':
             'std_variability': f"{report_data['std']['variability']:.2f}",
             'std_p5_p95_range': f"{report_data['std']['5%']:.2f} – {report_data['std']['95%']:.2f}",
 
+            'snr_min':f"{snr_group_statistic['min']:.2f}",
+            'snr_max':f"{snr_group_statistic['max']:.2f}",
+            'snr_avg':f"{snr_group_statistic['avg']:.2f}",
+            'snr_median':f"{snr_group_statistic['median']:.2f}",
+            'snr_variability':f"{snr_group_statistic['variability']:.2f}",
+            'snr_p5-p95':f"{snr_group_statistic['p5-p95']:.2f}",
+
             'impedance_range': f"{report_data['impedence_range']['min']:.2f} - {report_data['impedence_range']['max']:.2f}",
 
             'n_channels': total_channels,
@@ -167,12 +181,14 @@ if __name__ == '__main__':
             'electrode_map_image': os.path.join(output_dir, f"elec_mapping_group{group_id}.png"),
             'trend1_image': trend1_image,
             'trend2_image': trend2_image,
-            'bad_channels': bad_channels_list
+            'bad_channels': bad_channels_list,
+
+            'line_noise_table' : f"{group_line_noise['powerline_table']}"
 
         }
 
         # 6.2 生成当前group的趋势图
-        print(f"正在生成 Group {group_id} 的趋势图...")
+        print(f"正在生成 Group {group_id} 的趋势图 和 电极拓扑图...")
         Visualizer.plot_ch_win_mean(
             all_group_ch_win_means,
             group_id=group_id,
