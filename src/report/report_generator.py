@@ -30,6 +30,7 @@ _DEFAULTS = {
         'min': 20.30, 'max': 22.23, 'avg': 20.95,
         'median': 20.92, 'variability': 0.51,
         'p5-p95': '20.41 - 22.07',
+        'p1-p99': '',
     },
     # 阻抗（嵌套）
     'impedence_range': {
@@ -230,7 +231,7 @@ class PDFReportGenerator:
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     # 第1页：结论 + 电极拓扑图 + 脚注¹~⁷
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    def _add_conclusion(self, r):
+    def _add_conclusion(self, r, group_index=1, n_groups=1):
         g  = lambda k, fmt='': self._get(r, k, fmt)
         gn = lambda o, i, fmt='': self._gn(r, o, i, fmt)
 
@@ -241,7 +242,7 @@ class PDFReportGenerator:
         std_p1_p99 = self._format_percentile(r, 'std', '1%', '99%') + 'uV'
         std_p5_p95 = self._format_percentile(r, 'std', '5%', '95%') + 'uV'
         snr_range  = self._format_range(r, 'snr_range', unit='dB')
-        imp_range  = self._format_range(r, 'impedence_range', unit='ohm')
+        imp_range  = self._format_range(r, 'impedence_range', unit='kohm')
 
         line_noise_val = self._get(r, 'line_noise', '')
         if isinstance(line_noise_val, list):
@@ -249,7 +250,11 @@ class PDFReportGenerator:
         else:
             line_noise_str = str(line_noise_val)
 
-        self.story.append(Paragraph("结论<font size=10><super>1</super></font>：", self.styles['Section']))
+        if n_groups == 1:
+            label = "结果"
+        else:
+            label = f"第{group_index}组结果"
+        self.story.append(Paragraph(f"{label}<font size=10><super>1</super></font>：", self.styles['Section']))
         lines = [
             f"信号有效时长<font size=8><super>2</super></font>：{g('valid_length', ':.2f')}(s)；",
             f"工频噪声：[{line_noise_str}]；",
@@ -258,7 +263,7 @@ class PDFReportGenerator:
             f"标准差分布范围：{std_range}；1%-99%区间范围：<u>{std_p1_p99}</u>；5%-95%区间范围：<u>{std_p5_p95}</u>；",
             f"信噪比分布范围<font size=8><super>5</super></font>：{snr_range}；",
             f"阻抗分布范围<font size=8><super>6</super></font>：{imp_range}。",
-            "分析拓扑<font size=8><super>7</super></font>：",
+            "电极拓扑<font size=8><super>7</super></font>：",
         ]
         for line in lines:
             self.story.append(Paragraph(self._mix_fonts(line), self.styles['Body']))
@@ -381,8 +386,10 @@ class PDFReportGenerator:
 
     def _add_amp_table(self, r):
         gn = lambda i, fmt='': self._gn(r, 'amp', i, fmt)
+        p1 = gn('1%', ':.2f')
         p5 = gn('5%', ':.2f')
         p95 = gn('95%', ':.2f')
+        p99 = gn('99%', ':.2f')
         data = [
             ["统计量",  "数值 (μV)"],
             ["最小值",  gn('min', ':.2f')],
@@ -391,6 +398,7 @@ class PDFReportGenerator:
             ["中位数",  gn('median', ':.2f')],
             ["变异性",  gn('variability', ':.2f')],
             ["5%-95%", f"{p5} – {p95}"],
+            ["1%-99%", f"{p1} – {p99}"],
         ]
         self._add_table("幅度统计：", data, [8*cm, 8*cm])
 
@@ -399,8 +407,10 @@ class PDFReportGenerator:
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     def _add_std_table(self, r):
         gn = lambda i, fmt='': self._gn(r, 'std', i, fmt)
+        p1 = gn('1%', ':.2f')
         p5 = gn('5%', ':.2f')
         p95 = gn('95%', ':.2f')
+        p99 = gn('99%', ':.2f')
         data = [
             ["统计量",  "数值 (μV)"],
             ["最小值",  gn('min', ':.2f')],
@@ -409,13 +419,15 @@ class PDFReportGenerator:
             ["中位数",  gn('median', ':.2f')],
             ["变异性",  gn('variability', ':.2f')],
             ["5%-95%", f"{p5} – {p95}"],
+            ["1%-99%", f"{p1} – {p99}"],
         ]
         self._add_table("标准差统计：", data, [8*cm, 8*cm])
 
     def _add_snr_table(self, r):
         gn = lambda i, fmt='': self._gn(r, 'snr_range', i, fmt)
-        # 注意：snr_range 中的键名是 'p5-p95' 而不是 '5%' 和 '95%'
-        p5_p95 = self._get(r.get('snr_range', {}), 'p5-p95', '')
+        # 注意：snr_range 中的键名是 'p5-p95'/'p1-p99'，使用 gn 保持与 _DEFAULTS 一致
+        p5_p95 = gn('p5-p95')
+        p1_p99 = gn('p1-p99')
         data = [
             ["统计量",  "数值 (dB)"],
             ["最小值",  gn('min', ':.2f')],
@@ -424,6 +436,7 @@ class PDFReportGenerator:
             ["中位数",  gn('median', ':.2f')],
             ["变异性",  gn('variability', ':.2f')],
             ["5%-95%", str(p5_p95)],
+            ["1%-99%", str(p1_p99)],
         ]
         self._add_table("SNR 统计：", data, [8*cm, 8*cm])
 
@@ -503,7 +516,7 @@ class PDFReportGenerator:
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     # 多组支持：add_group + finalize
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    def add_group(self, group_id, results=None):
+    def add_group(self, group_id, results=None, n_groups=1):
         """将一个分组的全部内容追加到 story（支持多组拼接到同一 PDF）。
         调用完所有 add_group 后，需调用 finalize() 生成 PDF。
         """
@@ -514,7 +527,7 @@ class PDFReportGenerator:
         bad_ch = set(r.get('bad_channels', _DEFAULTS['bad_channels']))
 
         # ── 第1页 ────────────────────────────────────────────
-        self._add_conclusion(r)
+        self._add_conclusion(r, group_id + 1, n_groups)
         self._add_electrode_map(bad_ch, image_source=r.get('electrode_map_image'))
         self.story.append(PageBreak())
 

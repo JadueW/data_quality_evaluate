@@ -111,6 +111,7 @@ if __name__ == '__main__':
     )
 
     # 根据report_data的group_id来决定生成几个report
+    n_groups = len(all_report_data)
     for group_id, report_data in all_report_data.items():
 
         # 6. 报告生成
@@ -192,7 +193,7 @@ if __name__ == '__main__':
         )
 
         # 6.4 将当前 group 内容追加到报告
-        pdf_generator.add_group(group_id, pdf_results)
+        pdf_generator.add_group(group_id, pdf_results, n_groups=n_groups)
         print(f"Group {group_id} 内容已追加到报告")
 
     # 6.5 所有 group 追加完毕，生成最终 PDF
