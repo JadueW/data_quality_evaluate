@@ -246,9 +246,8 @@ class Preprocessor:
         此处方法与静息态分析代码中的方法一致, 参数不可调
         使用的坏道去除后的所有通道平均
         """
-        cared_data = data[self.ch_check_mask, ...]
-        mean_signal = np.mean(cared_data, axis=0)
-        return cared_data - mean_signal
+        mean_signal = np.mean(data[self.ch_check_mask, ...], axis=0)
+        return data - mean_signal
 
     def start(self, is_resample=False, **kwargs):
         rs = {}
