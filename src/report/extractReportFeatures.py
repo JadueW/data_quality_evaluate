@@ -223,7 +223,7 @@ class ExtractReportFeatures:
                     "1%": float(np.percentile(values, 1)),
                     "5%": float(np.percentile(values, 5)),
                     "95%": float(np.percentile(values, 95)),
-                    "99": float(np.percentile(values, 99))
+                    "99%": float(np.percentile(values, 99))
                 })
 
             # 保存到结果字典

@@ -251,7 +251,7 @@ class PDFReportGenerator:
 
         self.story.append(Paragraph("结论<font size=10><super>1</super></font>：", self.styles['Section']))
         lines = [
-            f"信号有效时长<font size=8><super>2</super></font>：---s（{g('valid_length', ':.2f')}%）；",
+            f"信号有效时长<font size=8><super>2</super></font>：{g('valid_length', ':.2f')}(s)；",
             f"工频噪声：[{line_noise_str}]；",
             f"坏道数/总数<font size=8><super>3</super></font>（百分比）：{g('bad_ch')}/{g('total_ch')}（{g('bad_ratio', ':.2f')}%）；",
             f"幅度分布范围<font size=8><super>4</super></font>：{amp_range}；1%-99%区间范围：<u>{amp_p1_p99}</u>；5%-95%区间范围：<u>{amp_p5_p95}</u>；",

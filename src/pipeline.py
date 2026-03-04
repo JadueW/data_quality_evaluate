@@ -15,6 +15,8 @@ from src.report.report_generator import PDFReportGenerator
 
 from src.visualize.visualizer import Visualizer
 
+from src.preprocessing.preprocessor import Preprocessor
+
 if __name__ == '__main__':
 
     data_dir = '../data/raw/小黑20260114第二只001对照组'
@@ -137,54 +139,37 @@ if __name__ == '__main__':
         trend2_image = os.path.join(output_dir, f"signal_trends_std_group{group_id}.png")
 
         pdf_results = {
-            'valid_length': f"{valid_length_sec:.2f}",
-            'line_noise': f"{group_line_noise['line_noise']}",
+            # 基础统计（数值格式化在 report_generator 中处理）
+            'valid_length': valid_length_sec,
             'bad_ch': report_data['bad_ch'],
             'total_ch': report_data['total_ch'],
-            'bad_ratio': f"{report_data['bad_ratio'] * 100:.2f}",
+            'bad_ratio': report_data['bad_ratio'] * 100,
 
-            'amp_range': f"{report_data['amp']['min']:.2f} - {report_data['amp']['max']:.2f}",
-            'amp_p1_p99': f"{report_data['amp']['1%']:.2f} - {report_data['amp']['99']:.2f}",
-            'amp_p5_p95': f"{report_data['amp']['5%']:.2f} - {report_data['amp']['95%']:.2f}",
-            'amp_min': f"{report_data['amp']['min']:.2f}",
-            'amp_max': f"{report_data['amp']['max']:.2f}",
-            'amp_mean': f"{report_data['amp']['avg']:.2f}",
-            'amp_median': f"{report_data['amp']['median']:.2f}",
-            'amp_variability': f"{report_data['amp']['variability']:.2f}",
-            'amp_p5_p95_range': f"{report_data['amp']['5%']:.2f} – {report_data['amp']['95%']:.2f}",
+            # 统计数据（嵌套结构，保持原始数值）
+            'amp': report_data['amp'],
+            'std': report_data['std'],
+            'snr_range': snr_group_statistic,
+            'impedence_range': report_data['impedence_range'],
 
-            'std_range': f"{report_data['std']['min']:.2f} - {report_data['std']['max']:.2f}",
-            'std_p1_p99': f"{report_data['std']['1%']:.2f} - {report_data['std']['99']:.2f}",
-            'std_p5_p95': f"{report_data['std']['5%']:.2f} - {report_data['std']['95%']:.2f}",
-            'std_min': f"{report_data['std']['min']:.2f}",
-            'std_max': f"{report_data['std']['max']:.2f}",
-            'std_mean': f"{report_data['std']['avg']:.2f}",
-            'std_median': f"{report_data['std']['median']:.2f}",
-            'std_variability': f"{report_data['std']['variability']:.2f}",
-            'std_p5_p95_range': f"{report_data['std']['5%']:.2f} – {report_data['std']['95%']:.2f}",
-
-            'snr_min':f"{snr_group_statistic['min']:.2f}",
-            'snr_max':f"{snr_group_statistic['max']:.2f}",
-            'snr_avg':f"{snr_group_statistic['avg']:.2f}",
-            'snr_median':f"{snr_group_statistic['median']:.2f}",
-            'snr_variability':f"{snr_group_statistic['variability']:.2f}",
-            'snr_p5-p95':f"{snr_group_statistic['p5-p95']}",
-
-            'impedance_range': f"{report_data['impedence_range']['min']:.2f} - {report_data['impedence_range']['max']:.2f}",
-
+            # 数据采集信息
             'n_channels': total_channels,
-            'sample_rate': f"{fs} Hz",
-            'duration': f"{total_duration:.2f} 秒",
-            'data_kb': f"{data_size_kb:,.2f}",
-            'data_mb': f"{data_size_mb:,.2f}",
+            'sample_rate': fs,
+            'duration': total_duration,
+            'data_kb': data_size_kb,
+            'data_mb': data_size_mb,
 
+            # 图片路径和坏通道列表
             'electrode_map_image': os.path.join(output_dir, f"elec_mapping_group{group_id}.png"),
             'trend1_image': trend1_image,
             'trend2_image': trend2_image,
             'bad_channels': bad_channels_list,
 
-            'line_noise_table' : f"{group_line_noise['powerline_table']}"
+            # 线噪声数据
+            'line_noise': group_line_noise['line_noise'],
+            'powerline_table': group_line_noise['powerline_table'],
 
+            # 陷波频率
+            'notch_freqs': Preprocessor.notch_harmonics
         }
 
         # 6.2 生成当前group的趋势图
