@@ -12,6 +12,7 @@ class Preprocessor:
     def __init__(self, raw_data):
         self.raw_data = raw_data
         self.group_ch_num = None
+        self.grouped_data = None
         self.fs = self.raw_data.get("fs", None)
         self.resample_fs = None
         if not self.fs:
@@ -77,6 +78,8 @@ class Preprocessor:
             pse_num = kwargs.get("pse_num", 1)
             pse_order = kwargs.get("pse_order", "order")
             self.group_ch_num = pse_ch_num
+            assert self.grouped_data == np.array(
+                mapping).size, f"读取到了mapping通道数量【{np.array(mapping).size}】与预期的电极通道数量【{pse_ch_num}】不符"
 
             # 根据电极物理位置，调整映射
             if pse_order == "order":
@@ -94,8 +97,8 @@ class Preprocessor:
 
         else:
             raise AssertionError(f"目前只接受两种电极类型, 分别为pse和uCortex, 得到了一个{ele_type}类型")
-
-        return grouped_data
+        self.grouped_data = grouped_data
+        return self.grouped_data
 
     def __re_mapping(self, data, new_mapping):
         """
