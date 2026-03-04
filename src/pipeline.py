@@ -168,7 +168,7 @@ if __name__ == '__main__':
             'snr_avg':f"{snr_group_statistic['avg']:.2f}",
             'snr_median':f"{snr_group_statistic['median']:.2f}",
             'snr_variability':f"{snr_group_statistic['variability']:.2f}",
-            'snr_p5-p95':f"{snr_group_statistic['p5-p95']:.2f}",
+            'snr_p5-p95':f"{snr_group_statistic['p5-p95']}",
 
             'impedance_range': f"{report_data['impedence_range']['min']:.2f} - {report_data['impedence_range']['max']:.2f}",
 
