@@ -209,7 +209,8 @@ def handle_line_noise_detection(batch_datasets):
 
             if is_good:
                 # 如果是好的窗口，从原始数据中计算line noise
-                line_noise_flag = pp.line_noise_detect(pp.raw_data["data"])
+                # 取当前组的数据
+                line_noise_flag = pp.line_noise_detect(pp.grouped_data[k])
                 # 并更新snr
                 v.update({"line_noise": line_noise_flag})
                 # 去掉预处理数据
@@ -217,7 +218,7 @@ def handle_line_noise_detection(batch_datasets):
                 grouped_line_noise_flag.update({wid: {k: v}})
             else:
                 # 并更新snr
-                v.update({"line_noise": []})
+                v.update({"line_noise": np.zeros((pp.group_ch_num, len(pp.harmonics)), dtype=bool)})
                 # 去掉预处理数据
                 del v["processed_data"]
                 grouped_line_noise_flag.update({wid: {k: v}})
@@ -258,8 +259,8 @@ def handle_line_noise_detection(batch_datasets):
         gid_ch_line_noise = []
         if valid_win.shape[0]:
             # 存在有效窗口
-            valid_win_line_noise = all_win_value["line_noise"]
-            # 调整维度 (wid, chid, noise_flag)
+            valid_win_line_noise = np.array(all_win_value["line_noise"])[valid_win.reshape(-1, ), ...]
+            #  (wid, chid, noise_flag) 调整维度
             valid_win_line_noise = np.array(valid_win_line_noise).transpose(1, 0, 2)
             # 取各通道所有窗口结果
             for ch in valid_win_line_noise:
