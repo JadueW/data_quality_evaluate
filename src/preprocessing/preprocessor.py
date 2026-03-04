@@ -78,7 +78,7 @@ class Preprocessor:
             pse_num = kwargs.get("pse_num", 1)
             pse_order = kwargs.get("pse_order", "order")
             self.group_ch_num = pse_ch_num
-            assert self.grouped_data == np.array(
+            assert pse_ch_num == np.array(
                 mapping).size, f"读取到了mapping通道数量【{np.array(mapping).size}】与预期的电极通道数量【{pse_ch_num}】不符"
 
             # 根据电极物理位置，调整映射
