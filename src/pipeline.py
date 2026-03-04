@@ -123,8 +123,8 @@ if __name__ == '__main__':
 
         valid_length_sec = report_data['valid_length']
 
-        trend1_image = f"./signal_trends_mean_group{group_id}.png"
-        trend2_image = f"./signal_trends_std_group{group_id}.png"
+        trend1_image = os.path.join(output_dir, f"signal_trends_mean_group{group_id}.png")
+        trend2_image = os.path.join(output_dir, f"signal_trends_std_group{group_id}.png")
 
         pdf_results = {
             'valid_length': f"{valid_length_sec:.2f}",
