@@ -16,7 +16,6 @@ from src.report.report_generator import PDFReportGenerator
 from src.visualize.visualizer import Visualizer
 from src.preprocessing.preprocessor import Preprocessor
 import matplotlib.pyplot as plt
-import matplotlib
 
 plt.rcParams.update({
     # --- 字体设置 ---
