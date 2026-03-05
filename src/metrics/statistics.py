@@ -3,13 +3,7 @@ from .welford_statistics import WelfordArray
 
 
 class Statistics:
-    """
-    混合统计算法实现：
-    1. Welford 在线统计算法：用于计算精确的均值、标准差（数值稳定、内存高效）
-    2. TDigest 概率统计算法：用于计算百分位数（适合大规模数据）
 
-    两种算法互补使用，提供完整的统计分析能力
-    """
 
     def __init__(self, processed_win_data, delta=100):
         """
@@ -25,13 +19,7 @@ class Statistics:
         self.processed_win_data = processed_win_data
 
     def compute_single_win_statistics(self):
-        """
-        精确计算统计量，输出每个窗口的计算的统计结果
 
-        使用混合算法：
-        - Welford: 计算均值、标准差（精确且数值稳定）
-        - TDigest: 计算百分位数（内存高效）
-        """
         win_group_statistics = {}
 
         # 遍历每个group，计算该窗口的统计量
@@ -43,7 +31,7 @@ class Statistics:
             statistics_win_data = {
                 "win_check_mask": group_data['is_good'],
                 "ch_check_mask": group_data['ch_check_mask'],
-                # Welford 统计：用于精确计算均值和标准差
+                # Welford 统计：用于计算均值和标准差
                 "win_welford": WelfordArray(n_channels=n_channels),
                 # TDigest 统计：用于计算百分位数
                 "win_tdigest": [TDigest(delta=self.delta) for _ in range(n_channels)],
