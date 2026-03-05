@@ -201,7 +201,7 @@ class DataParse(FileProcess):
         datasets = {}
 
         datasets['data'] = data['amplifier_data']
-        datasets['impedence'] = self.impedence
+        datasets['impedence'] = self.impedence / 1000.0
         datasets['fs'] = data['frequency_parameters']['amplifier_sample_rate']
         datasets['mapping'] = self.mapping
         datasets['ele_type'] = self.elec_type
