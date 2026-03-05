@@ -153,36 +153,36 @@ class ExtractReportFeatures:
 
     def _compute_report_statistics(self):
         all_group_channels_tdigest = self._compute_cross_win()
-
         all_group_values = {}
 
-
         for group_id, channels_tdigest in all_group_channels_tdigest.items():
-            all_channel_amps = []
-            all_channel_stds = []
-            all_channel_means = []
-            for ch_tdigest in channels_tdigest:
-                # 从TDigest计算该通道的特征量
-                # 1. 计算amp = max - min
-                max_val = ch_tdigest.percentile(100)
-                min_val = ch_tdigest.percentile(0)
-                amp = max_val - min_val
-                all_channel_amps.append(amp)
 
-                # 2. 使用质心 + 权重计算 加权均值
+            group_amp_digest = TDigest()
+            for ch_tdigest in channels_tdigest:
+                group_amp_digest += ch_tdigest
+
+            all_channel_means = []
+            all_channel_stds = []
+
+            for ch_tdigest in channels_tdigest:
                 centroids_list = ch_tdigest.centroids_to_list()
                 mean_value = self._compute_dgigest_mean(centroids_list)
                 all_channel_means.append(mean_value)
 
-                # 3 使用质心估算标准差
-                variance_val = 0.0
-                for i in range(len(centroids_list)):
-                    variance_val += centroids_list[i]['c'] * (centroids_list[i]['m'] - mean_value)**2
-                # 使用P84-P16进行标准差估算，防止Variance为0
-                std_approxy = ch_tdigest.percentile(84) - ch_tdigest.percentile(16)
-                std_value= np.sqrt(variance_val) if variance_val > 0 else std_approxy
+                variance_val = sum(
+                    c['c'] * (c['m'] - mean_value) ** 2
+                    for c in centroids_list
+                )
+
+                std_approx = ch_tdigest.percentile(84) - ch_tdigest.percentile(16)
+                std_value = np.sqrt(variance_val) if variance_val > 0 else std_approx
                 all_channel_stds.append(std_value)
-            all_group_values[group_id] = all_channel_amps, all_channel_means, all_channel_stds
+
+            all_group_values[group_id] = {
+                "amp_digest": group_amp_digest,
+                "means": np.array(all_channel_means),
+                "stds": np.array(all_channel_stds)
+            }
 
         return all_group_values
 
@@ -191,58 +191,86 @@ class ExtractReportFeatures:
         为每个 group_id 生成独立的统计报告
         :return: 字典 {group_id: report_data}
         """
+
         all_group_values = self._compute_report_statistics()
-        # 获取跨窗口跨通道的统计
+
         all_group_ch_win_means = self.compute_ch_win_mean()
         all_group_ch_win_stds = self.compute_ch_win_std()
 
         all_report_data = {}
 
-        # 为每个 group_id 生成独立的 report_data
-        for group_id, (amps, means, stds) in all_group_values.items():
-            # 创建该 group 的 report_data 模板
+        for group_id, group_data in all_group_values.items():
+
             report_data = self._create_report_data_template()
 
-            # 计算该 group 的通道和窗口统计信息
-            total_ch, bad_ch, bad_ratio, valid_length, all_ch_check_mask = self._compute_win_ch(group_id)
+            total_ch, bad_ch, bad_ratio, valid_length, _ = \
+                self._compute_win_ch(group_id)
 
-            # 填充基本信息
-            report_data["valid_length"] = valid_length
-            report_data["bad_ch"] = bad_ch
-            report_data["total_ch"] = total_ch
-            report_data["bad_ratio"] = bad_ratio
+            report_data["valid_length"] = float(valid_length)
+            report_data["bad_ch"] = int(bad_ch)
+            report_data["total_ch"] = int(total_ch)
+            report_data["bad_ratio"] = float(bad_ratio)
 
-            # 获取该组的 ch_win_means 和 ch_win_stds
-            ch_win_means = all_group_ch_win_means.get(group_id, [])
-            ch_win_stds = all_group_ch_win_stds.get(group_id, [])
+            amp_digest = group_data["amp_digest"]
+            centroids = amp_digest.centroids_to_list()
 
-            # 对每个通道跨窗口求平均，得到通道级的值
-            means_array = np.array([np.mean(ch_means) for ch_means in ch_win_means]) if len(ch_win_means) > 0 else np.array([])
-            stds_array = np.array([np.mean(ch_stds) for ch_stds in ch_win_stds]) if len(ch_win_stds) > 0 else np.array([])
-            amps_array = np.array(amps) if len(amps) > 0 else np.array([])
+            amp_mean = self._compute_dgigest_mean(centroids)
+            p0 = amp_digest.percentile(0)
+            p100 = amp_digest.percentile(100)
 
-            # 计算幅度、均值、标准差的统计量
-            for metric_name, values in [("amp", amps_array), ("mean", means_array), ("std", stds_array)]:
-                if len(values) == 0:
-                    continue
+            p1 = max(p0, amp_digest.percentile(1))
+            p99 = min(p100, amp_digest.percentile(99))
 
-                report_data[metric_name].update({
-                    "min": float(np.min(values)),
-                    "max": float(np.max(values)),
-                    "avg": float(np.mean(values)),
-                    "median": float(np.median(values)),
-                    "variability": float(np.std(values)),
-                    "1%": float(np.percentile(values, 1)),
-                    "5%": float(np.percentile(values, 5)),
-                    "95%": float(np.percentile(values, 95)),
-                    "99%": float(np.percentile(values, 99))
+            report_data["amp"].update({
+                "min": float(p0),
+                "max": float(p100),
+                "avg": float(amp_mean),
+                "median": float(amp_digest.percentile(50)),
+                "variability": float(
+                    amp_digest.percentile(84) - amp_digest.percentile(16)
+                ),
+                "1%": float(p1),
+                "5%": float(amp_digest.percentile(5)),
+                "95%": float(amp_digest.percentile(95)),
+                "99%": float(p99)
+            })
+
+            means_array = all_group_ch_win_means.get("group_id",{})
+
+            if len(means_array) > 0:
+                report_data["mean"].update({
+                    "min": float(np.min(means_array)),
+                    "max": float(np.max(means_array)),
+                    "avg": float(np.mean(means_array)),
+                    "median": float(np.median(means_array)),
+                    "variability": float(np.std(means_array)),
+                    "1%": float(np.percentile(means_array, 1)),
+                    "5%": float(np.percentile(means_array, 5)),
+                    "95%": float(np.percentile(means_array, 95)),
+                    "99%": float(np.percentile(means_array, 99))
                 })
 
-            # 保存原始的跨窗口跨通道数据
-            report_data["ch_win_means"] = ch_win_means
-            report_data["ch_win_stds"] = ch_win_stds
+            stds_array = all_group_ch_win_stds.get("group_id",{})
 
-            # 保存到结果字典
+            if len(stds_array) > 0:
+                report_data["std"].update({
+                    "min": float(np.min(stds_array)),
+                    "max": float(np.max(stds_array)),
+                    "avg": float(np.mean(stds_array)),
+                    "median": float(np.median(stds_array)),
+                    "variability": float(np.std(stds_array)),
+                    "1%": float(np.percentile(stds_array, 1)),
+                    "5%": float(np.percentile(stds_array, 5)),
+                    "95%": float(np.percentile(stds_array, 95)),
+                    "99%": float(np.percentile(stds_array, 99))
+                })
+
+            report_data["ch_win_means"] = \
+                all_group_ch_win_means.get(group_id, [])
+
+            report_data["ch_win_stds"] = \
+                all_group_ch_win_stds.get(group_id, [])
+
             all_report_data[group_id] = report_data
 
         return all_report_data
@@ -260,13 +288,16 @@ class ExtractReportFeatures:
         for group_id, group_values in self.all_group_statistics_data.items():
             ch_win_means = []
             all_win_tdigest = group_values["all_win_tdigest"]
+            all_win_check_mask = group_values["all_win_check_mask"]
             for ch_idx in range(len(all_win_tdigest)):
                 channel_tdigest = all_win_tdigest[ch_idx]
                 channel_means = []
                 for win_idx in range(len(channel_tdigest)):
-                    centroids_list = channel_tdigest[win_idx].centroids_to_list()
-                    mean_value = self._compute_dgigest_mean(centroids_list)
-                    channel_means.append(mean_value)
+                    win_status = all_win_check_mask[win_idx]
+                    if win_status:
+                        centroids_list = channel_tdigest[win_idx].centroids_to_list()
+                        mean_value = self._compute_dgigest_mean(centroids_list)
+                        channel_means.append(mean_value)
                 ch_win_means.append(channel_means)
             all_group_ch_win_means[group_id] = ch_win_means
 
@@ -295,30 +326,23 @@ class ExtractReportFeatures:
         for group_id, group_values in self.all_group_statistics_data.items():
             ch_win_std = []
             all_win_tdigest = group_values["all_win_tdigest"]
-            print(f"\n=== compute_ch_win_std: Group {group_id} ===")
-            print(f"通道数: {len(all_win_tdigest)}, 窗口数: {len(all_win_tdigest[0]) if len(all_win_tdigest) > 0 else 0}")
+            all_win_check_mask = group_values["all_win_check_mask"]
 
             for ch_idx in range(len(all_win_tdigest)):
                 channel_tdigest = all_win_tdigest[ch_idx]
                 channel_std = []
                 for win_idx in range(len(channel_tdigest)):
-                    centroids_list = channel_tdigest[win_idx].centroids_to_list()
-                    mean_value = self._compute_dgigest_mean(centroids_list)
-                    variance_val = 0.0
-                    for i in range(len(centroids_list)):
-                        variance_val += centroids_list[i]['c'] * (centroids_list[i]['m'] - mean_value) ** 2
-                    # 使用P84-P16进行标准差估算，防止Variance为0
-                    std_approxy = channel_tdigest[win_idx].percentile(84) - channel_tdigest[win_idx].percentile(16)
-                    std_value = np.sqrt(variance_val) if variance_val > 0 else std_approxy
-                    channel_std.append(std_value)
-
-                # 打印前3个通道的统计信息
-                if ch_idx < 3:
-                    std_array = np.array(channel_std)
-                    print(f"  通道 {ch_idx}: std 均值={np.mean(std_array):.2f}, "
-                          f"std 标准差={np.std(std_array):.4f}, "
-                          f"范围=[{np.min(std_array):.2f}, {np.max(std_array):.2f}]")
-
+                    win_status = all_win_check_mask[win_idx]
+                    if win_status:
+                        centroids_list = channel_tdigest[win_idx].centroids_to_list()
+                        mean_value = self._compute_dgigest_mean(centroids_list)
+                        variance_val = 0.0
+                        for i in range(len(centroids_list)):
+                            variance_val += centroids_list[i]['c'] * (centroids_list[i]['m'] - mean_value) ** 2
+                        # 使用P84-P16进行标准差估算，防止Variance为0
+                        std_approxy = channel_tdigest[win_idx].percentile(84) - channel_tdigest[win_idx].percentile(16)
+                        std_value = np.sqrt(variance_val) if variance_val > 0 else std_approxy
+                        channel_std.append(std_value)
                 ch_win_std.append(channel_std)
             all_group_ch_win_std[group_id] = ch_win_std
 
