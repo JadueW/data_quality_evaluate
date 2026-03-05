@@ -2,7 +2,7 @@
 可视化
 """
 import matplotlib.pyplot as plt
-from matplotlib.patches import Circle
+from matplotlib.patches import Circle, Rectangle
 import matplotlib.patches as mpatches
 import numpy as np
 
@@ -26,9 +26,9 @@ class Visualizer:
             offset_values = means + ch_idx * offset
             ax.plot(range(n_windows), offset_values, linewidth=0.8, alpha=0.7)
 
-        ax.set_xlabel('Window Index', fontsize=12)
-        ax.set_ylabel('Channel (with offset)', fontsize=12)
-        ax.set_title(f'Channel Mean Trends Over Windows - Group: {group_id}', fontsize=14)
+        ax.set_xlabel('Window Index', fontsize=18)
+        ax.set_ylabel('Channel', fontsize=18)
+        ax.set_title(f'Channel Mean Trends Over Windows - Group: {group_id}', fontsize=18)
         ax.set_yticks([i * offset for i in range(n_channels)])
         ax.set_yticklabels([f'Ch{i}' for i in range(n_channels)])
 
@@ -46,17 +46,6 @@ class Visualizer:
         n_channels = len(ch_win_std)
         n_windows = len(ch_win_std[0])
 
-        # 添加调试信息
-        print(f"\n=== plot_ch_win_std 调试信息 (Group {group_id}) ===")
-        print(f"通道数: {n_channels}, 窗口数: {n_windows}")
-        print(f"数据形状检查:")
-        for ch_idx in range(min(3, n_channels)):  # 只打印前3个通道
-            std_values = np.array(ch_win_std[ch_idx])
-            print(f"  通道 {ch_idx}: 均值={np.mean(std_values):.2f}, "
-                  f"标准差={np.std(std_values):.2f}, "
-                  f"范围=[{np.min(std_values):.2f}, {np.max(std_values):.2f}], "
-                  f"前5个值={std_values[:5]}")
-
         fig, ax = plt.subplots(figsize=(12, 8))
 
         for ch_idx in range(n_channels):
@@ -64,9 +53,9 @@ class Visualizer:
             offset_values = std + ch_idx * offset
             ax.plot(range(n_windows), offset_values,linewidth=0.8, alpha=0.7)
 
-        ax.set_xlabel('Window Index', fontsize=12)
-        ax.set_ylabel('Channel (with offset)', fontsize=12)
-        ax.set_title(f'Channel Std Trends Over Windows - Group: {group_id}', fontsize=14)
+        ax.set_xlabel('Window Index', fontsize=18)
+        ax.set_ylabel('Channel', fontsize=18)
+        ax.set_title(f'Channel Std Trends Over Windows - Group: {group_id}', fontsize=18)
         ax.set_yticks([i * offset for i in range(n_channels)])
         ax.set_yticklabels([f'Ch{i}' for i in range(n_channels)])
 
@@ -121,6 +110,20 @@ class Visualizer:
 
             ax.text(x, y, str(ch_idx), ha='center', va='center',
                     fontsize=7, color='white', fontweight='bold')
+
+        margin = ch_spacing * 0.4
+        x_left = -margin
+        y_bottom = -margin
+        width = (n_cols - 1) * ch_spacing + 2 * margin
+        height = (n_rows - 1) * ch_spacing + 2 * margin
+
+        # 绘制灰色矩形边框
+        border = Rectangle((x_left, y_bottom), width, height,
+                           linewidth=1.5,
+                           edgecolor='#4B4B4B',
+                           facecolor='none',
+                           zorder=0)
+        ax.add_patch(border)
 
         # 设置坐标轴
         ax.set_xlim(-1, n_cols * ch_spacing + 0.1)
