@@ -162,6 +162,9 @@ def compute_snr_statistics(all_group_data):
         p5 = np.percentile(all_snr_values, 5)
         p95 = np.percentile(all_snr_values, 95)
 
+        p1 = np.percentile(all_snr_values, 1)
+        p99 = np.percentile(all_snr_values, 99)
+
         snr_statistics = {
             "min": round(min_val, 2),
             "max": round(max_val, 2),
@@ -169,6 +172,7 @@ def compute_snr_statistics(all_group_data):
             "median": round(median_val, 2),
             "variability": round(std_val, 2),
             "p5-p95": f"{p5:.2f} - {p95:.2f}",
+            "p1-p99": f"{p1:.2f} - {p99:.2f}"
         }
 
         snr_group_statistics[group_id] = snr_statistics
