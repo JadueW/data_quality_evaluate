@@ -616,7 +616,7 @@ def load_file(filename):
     fid.close()
 
     if (data_present):
-        print('Parsing data...')
+        # print('Parsing data...')
 
         # Extract digital input channels to separate variables
         for i in range(header['num_board_dig_in_channels']):
@@ -646,10 +646,10 @@ def load_file(filename):
 
         # Check for gaps in timestamps
         num_gaps = np.sum(np.not_equal(data['t_amplifier'][1:] - data['t_amplifier'][:-1], 1))
-        if num_gaps == 0:
-            print('No missing timestamps in data.')
-        else:
-            print('Warning: {0} gaps in timestamp data found.  Time scale will not be uniform!'.format(num_gaps))
+        # if num_gaps == 0:
+        #     print('No missing timestamps in data.')
+        # else:
+        #     print('Warning: {0} gaps in timestamp data found.  Time scale will not be uniform!'.format(num_gaps))
 
         # Scale time steps (units = seconds)
         data['t_amplifier'] = data['t_amplifier'] / header['sample_rate']
@@ -662,11 +662,11 @@ def load_file(filename):
 
         # If the software notch filter was selected during the recording, apply the
         # same notch filter to amplifier data here
-        if header['version']['major'] >= 3:
-            print('The data has been filted with notch!')
+        # if header['version']['major'] >= 3:
+        #     print('The data has been filted with notch!')
 
         if header['notch_filter_frequency'] > 70 and header['version']['major'] < 3:
-            print('Applying notch filter...')
+            # print('Applying notch filter...')
 
             print_increment = 10
             percent_done = print_increment
@@ -684,7 +684,6 @@ def load_file(filename):
     # Move variables to result struct
     result = data_to_result(header, data, data_present)
 
-    print('Done!  Elapsed time: {0:0.1f} seconds'.format(time.time() - tic))
 
     return result, data_present
 
