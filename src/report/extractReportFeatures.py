@@ -1,19 +1,3 @@
-"""
-用来提取相关指标：
-    1. 用来绘制 电极拓扑、信号变化趋势图1、信号变化趋势图2
-    2. 提供report_data的数据接口
-        valid_length
-        line_noise
-        bad_ch
-        total_ch
-        bad_ratio
-        amp,std,mean的max, min, avg, median, varibility, 1%, 5%, 95% 99%
-        impedence_range(min,max,avg)
-
-    优化说明：
-    - 使用 Welford 统计量直接获取均值和标准差（更精确、更高效）
-    - 使用 TDigest 计算幅度的百分位数
-"""
 
 import numpy as np
 from tdigest import TDigest
@@ -42,11 +26,11 @@ class ExtractReportFeatures:
         min_val, max_val, avg_val = self._compute_impedence_range()
 
         return {
-            "valid_length": 0.0,  # 在后续计算中填充
+            "valid_length": 0.0,
             "line_noise": 0.0,
-            "bad_ch": 0,          # 在后续计算中填充
-            "total_ch": 0,        # 在后续计算中填充
-            "bad_ratio": 0.0,     # 在后续计算中填充
+            "bad_ch": 0,
+            "total_ch": 0,
+            "bad_ratio": 0.0,
             "amp":{
                 "min": 0.0,
                 "max": 0.0,
@@ -80,8 +64,8 @@ class ExtractReportFeatures:
                 "95%": 0.0,
                 "99%": 0.0
             },
-            "ch_win_means": [],    # 跨窗口跨通道的均值 [[ch0_win0, ch0_win1, ...], ...]
-            "ch_win_stds": [],     # 跨窗口跨通道的标准差 [[ch0_win0, ch0_win1, ...], ...]
+            "ch_win_means": [],
+            "ch_win_stds": [],
             "snr_range":{
                 "min": 0.0,
                 "max": 0.0,
@@ -315,7 +299,6 @@ class ExtractReportFeatures:
                     "99%": float(np.percentile(stds_array_flat, 99))
                 })
 
-                # 在终端输出标准差统计结果
                 print(f"\n========== Group {group_id} 标准差统计结果 ==========")
                 print(f"最小值: {report_data['std']['min']:.6f}")
                 print(f"最大值: {report_data['std']['max']:.6f}")
@@ -340,17 +323,7 @@ class ExtractReportFeatures:
         return all_report_data
 
     def compute_ch_win_mean(self):
-        """
-        计算输出跨窗口跨通道的均值
 
-        优化版本：直接从 Welford 统计量获取均值，无需从 TDigest 计算
-
-        :return: 字典嵌套列表的形式
-         all_group_ch_win_means = {
-            group_id : [[ch0_0,ch0_1,ch0_2,ch0_3,ch0_4,ch0_5,ch0_6],...],[ch1_0,ch1_1,ch1_2,ch1_3,ch1_4,ch1_5,ch1_6]...],.....]
-            # ch0_0代表在win= 0 ,ch = 0的情况下的均值
-         }
-        """
         all_group_ch_win_means = {}
         for group_id, group_values in self.all_group_statistics_data.items():
             ch_win_means = []
@@ -364,7 +337,6 @@ class ExtractReportFeatures:
                 for win_idx, welford_stat in enumerate(channel_welford):
                     win_status = all_win_check_mask[win_idx]
                     if win_status and welford_stat.count > 0:
-                        # 直接从 Welford 统计量获取均值（精确且高效）
                         channel_means.append(welford_stat.mean)
 
                 ch_win_means.append(channel_means)
@@ -383,17 +355,7 @@ class ExtractReportFeatures:
         return mean_value
 
     def compute_ch_win_std(self):
-        """
-        计算输出跨窗口跨通道的标准差
 
-        优化版本：直接从 Welford 统计量获取标准差，无需从 TDigest 计算
-
-        :return: 字典嵌套列表的形式
-        all_group_ch_win_std = {
-            group_id : [[ch0_0,ch0_1,ch0_2,ch0_3,ch0_4,ch0_5,ch0_6],...],[ch1_0,ch1_1,ch1_2,ch1_3,ch1_4,ch1_5,ch1_6]...],.....]
-            # ch0_0代表在win= 0 ,ch = 0的情况下的std值
-        }
-        """
         all_group_ch_win_std = {}
         for group_id, group_values in self.all_group_statistics_data.items():
             ch_win_std = []
@@ -407,7 +369,6 @@ class ExtractReportFeatures:
                 for win_idx, welford_stat in enumerate(channel_welford):
                     win_status = all_win_check_mask[win_idx]
                     if win_status and welford_stat.count > 0:
-                        # 直接从 Welford 统计量获取标准差（精确且高效）
                         channel_std.append(welford_stat.std)
 
                 ch_win_std.append(channel_std)
