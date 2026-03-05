@@ -38,20 +38,46 @@ class Visualizer:
         return fig
 
     @classmethod
-    def plot_ch_win_std(cls,all_group_ch_win_std,group_id=None,offset=5,**kwargs):
+    def plot_ch_win_std(cls, all_group_ch_win_std, group_id=None, offset=None, **kwargs):
+        """
+        绘制通道标准差趋势图
+
+        Args:
+            all_group_ch_win_std: 所有组的通道-窗口标准差数据
+            group_id: 要绘制的组 ID
+            offset: 通道偏移量，如果为 None 则自动计算（默认为标准差范围的 3 倍）
+            **kwargs: 其他参数，包括 save_path
+        """
         if group_id is None:
             group_id = list(all_group_ch_win_std.keys())[0]
 
         ch_win_std = all_group_ch_win_std[group_id]
         n_channels = len(ch_win_std)
-        n_windows = len(ch_win_std[0])
+
+        # 计算实际使用的窗口数（可能各通道窗口数不同）
+        n_windows = max(len(ch_std) for ch_std in ch_win_std) if ch_win_std else 0
+
+        # 自动计算合适的偏移量
+        if offset is None:
+            # 收集所有标准差值
+            all_std_values = []
+            for ch_std in ch_win_std:
+                all_std_values.extend(ch_std)
+
+            if all_std_values:
+                all_std_values = np.array(all_std_values)
+                std_range = np.max(all_std_values) - np.min(all_std_values)
+                # 偏移量设为标准差范围的 3 倍，确保各通道线条不重叠
+                offset = max(std_range * 3, 5.0)  # 至少为 5
+            else:
+                offset = 5.0
 
         fig, ax = plt.subplots(figsize=(12, 8))
 
         for ch_idx in range(n_channels):
             std = np.array(ch_win_std[ch_idx])
             offset_values = std + ch_idx * offset
-            ax.plot(range(n_windows), offset_values,linewidth=0.8, alpha=0.7)
+            ax.plot(range(n_windows), offset_values, linewidth=0.8, alpha=0.7)
 
         ax.set_xlabel('Window Index', fontsize=18)
         ax.set_ylabel('Channel', fontsize=18)
@@ -60,7 +86,7 @@ class Visualizer:
         ax.set_yticklabels([f'Ch{i}' for i in range(n_channels)])
 
         plt.tight_layout()
-        plt.savefig(kwargs.get('save_path',"./signal_trends_std.png"),dpi=600)
+        plt.savefig(kwargs.get('save_path', "./signal_trends_std.png"), dpi=600)
 
         return fig
 

@@ -5,4 +5,4 @@ pandas==2.3.3
 psutil==7.2.2
 reportlab==4.4.9
 tdigest==0.5.2.2
-scipy== 1.16.3
+scipy== 1.15.3

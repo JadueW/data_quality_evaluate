@@ -9,10 +9,15 @@
         bad_ratio
         amp,std,mean的max, min, avg, median, varibility, 1%, 5%, 95% 99%
         impedence_range(min,max,avg)
+
+    优化说明：
+    - 使用 Welford 统计量直接获取均值和标准差（更精确、更高效）
+    - 使用 TDigest 计算幅度的百分位数
 """
 
 import numpy as np
 from tdigest import TDigest
+from typing import List, Dict, Tuple
 
 class ExtractReportFeatures:
     def __init__(self,all_group_statistics_data,timepoints,fs,impedence):
@@ -152,36 +157,69 @@ class ExtractReportFeatures:
         return all_group_channels_tdigest
 
     def _compute_report_statistics(self):
+        """
+        计算报告所需的统计数据
+
+        优化版本：
+        - 使用 Welford 统计量直接获取每个通道的均值和标准差
+        - 使用 TDigest 计算幅度的百分位数
+        """
+        # 使用绝对导入
+        from src.metrics.welford_statistics import WelfordStatistics
+
         all_group_channels_tdigest = self._compute_cross_win()
         all_group_values = {}
 
         for group_id, channels_tdigest in all_group_channels_tdigest.items():
+            group_values = self.all_group_statistics_data[group_id]
+            all_win_welford = group_values["all_win_welford"]
 
+            # 合并所有通道的 TDigest 用于幅度统计
             group_amp_digest = TDigest()
             for ch_tdigest in channels_tdigest:
                 group_amp_digest += ch_tdigest
 
+            # 使用 Welford 统计量计算每个通道的均值和标准差
+            # 对每个通道的所有窗口统计进行合并
             all_channel_means = []
             all_channel_stds = []
 
-            for ch_tdigest in channels_tdigest:
-                centroids_list = ch_tdigest.centroids_to_list()
-                mean_value = self._compute_dgigest_mean(centroids_list)
-                all_channel_means.append(mean_value)
+            for ch_idx in range(len(all_win_welford)):
+                channel_welford_stats = all_win_welford[ch_idx]
 
-                variance_val = sum(
-                    c['c'] * (c['m'] - mean_value) ** 2
-                    for c in centroids_list
-                )
+                # 合并该通道所有窗口的统计
+                merged_welford = WelfordStatistics()
+                for welford_stat in channel_welford_stats:
+                    if welford_stat.count > 0:
+                        # 手动合并到新的 WelfordStatistics 对象
+                        # 避免直接修改原始统计量
+                        n1 = merged_welford.count
+                        mean1 = merged_welford.mean
+                        m2_1 = merged_welford.M2
 
-                std_approx = ch_tdigest.percentile(84) - ch_tdigest.percentile(16)
-                std_value = np.sqrt(variance_val) if variance_val > 0 else std_approx
-                all_channel_stds.append(std_value)
+                        n2 = welford_stat.count
+                        mean2 = welford_stat.mean
+                        m2_2 = welford_stat.M2
+
+                        if n1 == 0:
+                            merged_welford.count = n2
+                            merged_welford.mean = mean2
+                            merged_welford.M2 = m2_2
+                        else:
+                            total = n1 + n2
+                            delta = mean2 - mean1
+                            merged_welford.M2 = m2_1 + m2_2 + delta ** 2 * n1 * n2 / total
+                            merged_welford.mean = (n1 * mean1 + n2 * mean2) / total
+                            merged_welford.count = total
+
+                if merged_welford.count > 0:
+                    all_channel_means.append(merged_welford.mean)
+                    all_channel_stds.append(merged_welford.std)
 
             all_group_values[group_id] = {
                 "amp_digest": group_amp_digest,
-                "means": np.array(all_channel_means),
-                "stds": np.array(all_channel_stds)
+                "means": np.array(all_channel_means) if all_channel_means else np.array([]),
+                "stds": np.array(all_channel_stds) if all_channel_stds else np.array([])
             }
 
         return all_group_values
@@ -235,35 +273,61 @@ class ExtractReportFeatures:
                 "99%": float(p99)
             })
 
-            means_array = all_group_ch_win_means.get("group_id",{})
+            means_array = all_group_ch_win_means.get(group_id, [])
 
             if len(means_array) > 0:
+                # 将嵌套列表展平为一维数组
+                all_means = []
+                for ch_means in means_array:
+                    all_means.extend(ch_means)
+                means_array_flat = np.array(all_means)
+
                 report_data["mean"].update({
-                    "min": float(np.min(means_array)),
-                    "max": float(np.max(means_array)),
-                    "avg": float(np.mean(means_array)),
-                    "median": float(np.median(means_array)),
-                    "variability": float(np.std(means_array)),
-                    "1%": float(np.percentile(means_array, 1)),
-                    "5%": float(np.percentile(means_array, 5)),
-                    "95%": float(np.percentile(means_array, 95)),
-                    "99%": float(np.percentile(means_array, 99))
+                    "min": float(np.min(means_array_flat)),
+                    "max": float(np.max(means_array_flat)),
+                    "avg": float(np.mean(means_array_flat)),
+                    "median": float(np.median(means_array_flat)),
+                    "variability": float(np.std(means_array_flat)),
+                    "1%": float(np.percentile(means_array_flat, 1)),
+                    "5%": float(np.percentile(means_array_flat, 5)),
+                    "95%": float(np.percentile(means_array_flat, 95)),
+                    "99%": float(np.percentile(means_array_flat, 99))
                 })
 
-            stds_array = all_group_ch_win_stds.get("group_id",{})
+            stds_array = all_group_ch_win_stds.get(group_id, [])
 
             if len(stds_array) > 0:
+                # 将嵌套列表展平为一维数组
+                all_stds = []
+                for ch_stds in stds_array:
+                    all_stds.extend(ch_stds)
+                stds_array_flat = np.array(all_stds)
+
                 report_data["std"].update({
-                    "min": float(np.min(stds_array)),
-                    "max": float(np.max(stds_array)),
-                    "avg": float(np.mean(stds_array)),
-                    "median": float(np.median(stds_array)),
-                    "variability": float(np.std(stds_array)),
-                    "1%": float(np.percentile(stds_array, 1)),
-                    "5%": float(np.percentile(stds_array, 5)),
-                    "95%": float(np.percentile(stds_array, 95)),
-                    "99%": float(np.percentile(stds_array, 99))
+                    "min": float(np.min(stds_array_flat)),
+                    "max": float(np.max(stds_array_flat)),
+                    "avg": float(np.mean(stds_array_flat)),
+                    "median": float(np.median(stds_array_flat)),
+                    "variability": float(np.std(stds_array_flat)),
+                    "1%": float(np.percentile(stds_array_flat, 1)),
+                    "5%": float(np.percentile(stds_array_flat, 5)),
+                    "95%": float(np.percentile(stds_array_flat, 95)),
+                    "99%": float(np.percentile(stds_array_flat, 99))
                 })
+
+                # 在终端输出标准差统计结果
+                print(f"\n========== Group {group_id} 标准差统计结果 ==========")
+                print(f"最小值: {report_data['std']['min']:.6f}")
+                print(f"最大值: {report_data['std']['max']:.6f}")
+                print(f"平均值: {report_data['std']['avg']:.6f}")
+                print(f"中位数: {report_data['std']['median']:.6f}")
+                print(f"变异系数: {report_data['std']['variability']:.6f}")
+                print(f"1% 分位数: {report_data['std']['1%']:.6f}")
+                print(f"5% 分位数: {report_data['std']['5%']:.6f}")
+                print(f"95% 分位数: {report_data['std']['95%']:.6f}")
+                print(f"99% 分位数: {report_data['std']['99%']:.6f}")
+                print(f"有效样本数: {len(stds_array_flat)}")
+                print("=" * 50)
 
             report_data["ch_win_means"] = \
                 all_group_ch_win_means.get(group_id, [])
@@ -278,6 +342,9 @@ class ExtractReportFeatures:
     def compute_ch_win_mean(self):
         """
         计算输出跨窗口跨通道的均值
+
+        优化版本：直接从 Welford 统计量获取均值，无需从 TDigest 计算
+
         :return: 字典嵌套列表的形式
          all_group_ch_win_means = {
             group_id : [[ch0_0,ch0_1,ch0_2,ch0_3,ch0_4,ch0_5,ch0_6],...],[ch1_0,ch1_1,ch1_2,ch1_3,ch1_4,ch1_5,ch1_6]...],.....]
@@ -287,17 +354,19 @@ class ExtractReportFeatures:
         all_group_ch_win_means = {}
         for group_id, group_values in self.all_group_statistics_data.items():
             ch_win_means = []
-            all_win_tdigest = group_values["all_win_tdigest"]
+            all_win_welford = group_values["all_win_welford"]
             all_win_check_mask = group_values["all_win_check_mask"]
-            for ch_idx in range(len(all_win_tdigest)):
-                channel_tdigest = all_win_tdigest[ch_idx]
+
+            for ch_idx in range(len(all_win_welford)):
+                channel_welford = all_win_welford[ch_idx]
                 channel_means = []
-                for win_idx in range(len(channel_tdigest)):
+
+                for win_idx, welford_stat in enumerate(channel_welford):
                     win_status = all_win_check_mask[win_idx]
-                    if win_status:
-                        centroids_list = channel_tdigest[win_idx].centroids_to_list()
-                        mean_value = self._compute_dgigest_mean(centroids_list)
-                        channel_means.append(mean_value)
+                    if win_status and welford_stat.count > 0:
+                        # 直接从 Welford 统计量获取均值（精确且高效）
+                        channel_means.append(welford_stat.mean)
+
                 ch_win_means.append(channel_means)
             all_group_ch_win_means[group_id] = ch_win_means
 
@@ -315,7 +384,10 @@ class ExtractReportFeatures:
 
     def compute_ch_win_std(self):
         """
-        计算输出跨窗口跨通道的均值
+        计算输出跨窗口跨通道的标准差
+
+        优化版本：直接从 Welford 统计量获取标准差，无需从 TDigest 计算
+
         :return: 字典嵌套列表的形式
         all_group_ch_win_std = {
             group_id : [[ch0_0,ch0_1,ch0_2,ch0_3,ch0_4,ch0_5,ch0_6],...],[ch1_0,ch1_1,ch1_2,ch1_3,ch1_4,ch1_5,ch1_6]...],.....]
@@ -325,24 +397,19 @@ class ExtractReportFeatures:
         all_group_ch_win_std = {}
         for group_id, group_values in self.all_group_statistics_data.items():
             ch_win_std = []
-            all_win_tdigest = group_values["all_win_tdigest"]
+            all_win_welford = group_values["all_win_welford"]
             all_win_check_mask = group_values["all_win_check_mask"]
 
-            for ch_idx in range(len(all_win_tdigest)):
-                channel_tdigest = all_win_tdigest[ch_idx]
+            for ch_idx in range(len(all_win_welford)):
+                channel_welford = all_win_welford[ch_idx]
                 channel_std = []
-                for win_idx in range(len(channel_tdigest)):
+
+                for win_idx, welford_stat in enumerate(channel_welford):
                     win_status = all_win_check_mask[win_idx]
-                    if win_status:
-                        centroids_list = channel_tdigest[win_idx].centroids_to_list()
-                        mean_value = self._compute_dgigest_mean(centroids_list)
-                        variance_val = 0.0
-                        for i in range(len(centroids_list)):
-                            variance_val += centroids_list[i]['c'] * (centroids_list[i]['m'] - mean_value) ** 2
-                        # 使用P84-P16进行标准差估算，防止Variance为0
-                        std_approxy = channel_tdigest[win_idx].percentile(84) - channel_tdigest[win_idx].percentile(16)
-                        std_value = np.sqrt(variance_val) if variance_val > 0 else std_approxy
-                        channel_std.append(std_value)
+                    if win_status and welford_stat.count > 0:
+                        # 直接从 Welford 统计量获取标准差（精确且高效）
+                        channel_std.append(welford_stat.std)
+
                 ch_win_std.append(channel_std)
             all_group_ch_win_std[group_id] = ch_win_std
 
