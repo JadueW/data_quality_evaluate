@@ -23,6 +23,9 @@ class ExtractReportFeatures:
         :param impedence: 阻抗值的列表，ndarray格式
         :param fs: 采样率
         """
+        default_timepoints = 10000
+        if timepoints == 0:
+            timepoints = default_timepoints
         self.timepoints = timepoints
         self.fs = fs
         self.all_group_statistics_data = all_group_statistics_data
@@ -48,7 +51,7 @@ class ExtractReportFeatures:
                 "1%": 0.0,
                 "5%": 0.0,
                 "95%": 0.0,
-                "99": 0.0
+                "99%": 0.0
             },
             "std":{
                 "min": 0.0,
@@ -59,7 +62,7 @@ class ExtractReportFeatures:
                 "1%": 0.0,
                 "5%": 0.0,
                 "95%": 0.0,
-                "99": 0.0
+                "99%": 0.0
             },
             "mean":{
                 "min": 0.0,
@@ -70,8 +73,10 @@ class ExtractReportFeatures:
                 "1%": 0.0,
                 "5%": 0.0,
                 "95%": 0.0,
-                "99": 0.0
+                "99%": 0.0
             },
+            "ch_win_means": [],    # 跨窗口跨通道的均值 [[ch0_win0, ch0_win1, ...], ...]
+            "ch_win_stds": [],     # 跨窗口跨通道的标准差 [[ch0_win0, ch0_win1, ...], ...]
             "snr_range":{
                 "min": 0.0,
                 "max": 0.0,
@@ -187,6 +192,9 @@ class ExtractReportFeatures:
         :return: 字典 {group_id: report_data}
         """
         all_group_values = self._compute_report_statistics()
+        # 获取跨窗口跨通道的统计
+        all_group_ch_win_means = self.compute_ch_win_mean()
+        all_group_ch_win_stds = self.compute_ch_win_std()
 
         all_report_data = {}
 
@@ -204,10 +212,14 @@ class ExtractReportFeatures:
             report_data["total_ch"] = total_ch
             report_data["bad_ratio"] = bad_ratio
 
-            # 转换为 numpy 数组并计算统计量
+            # 获取该组的 ch_win_means 和 ch_win_stds
+            ch_win_means = all_group_ch_win_means.get(group_id, [])
+            ch_win_stds = all_group_ch_win_stds.get(group_id, [])
+
+            # 对每个通道跨窗口求平均，得到通道级的值
+            means_array = np.array([np.mean(ch_means) for ch_means in ch_win_means]) if len(ch_win_means) > 0 else np.array([])
+            stds_array = np.array([np.mean(ch_stds) for ch_stds in ch_win_stds]) if len(ch_win_stds) > 0 else np.array([])
             amps_array = np.array(amps) if len(amps) > 0 else np.array([])
-            means_array = np.array(means) if len(means) > 0 else np.array([])
-            stds_array = np.array(stds) if len(stds) > 0 else np.array([])
 
             # 计算幅度、均值、标准差的统计量
             for metric_name, values in [("amp", amps_array), ("mean", means_array), ("std", stds_array)]:
@@ -225,6 +237,10 @@ class ExtractReportFeatures:
                     "95%": float(np.percentile(values, 95)),
                     "99%": float(np.percentile(values, 99))
                 })
+
+            # 保存原始的跨窗口跨通道数据
+            report_data["ch_win_means"] = ch_win_means
+            report_data["ch_win_stds"] = ch_win_stds
 
             # 保存到结果字典
             all_report_data[group_id] = report_data
