@@ -79,3 +79,4 @@ cython_debug/
 
 .idea
 data
+results
