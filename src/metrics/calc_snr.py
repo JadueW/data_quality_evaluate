@@ -118,16 +118,35 @@ def _win_SNR_statistics(snr_data_win_dict):
     return group_data
 
 def SNR_statistics(snr_data_dict):
+    """
+    聚合所有窗口的SNR数据
 
-    group_ids = list(snr_data_dict[0].keys())
+    Args:
+        snr_data_dict: {窗口ID: {组ID: {win_SNR: ...}}}
+
+    Returns:
+        all_group_data: {组ID: [窗口1的SNR数组, 窗口2的SNR数组, ...]}
+    """
+    # 处理空数据的情况
+    if not snr_data_dict or len(snr_data_dict) == 0:
+        return {}
+
+    # 从第一个窗口获取组ID列表（假设所有窗口的组ID一致）
+    first_win_id = next(iter(snr_data_dict.keys()))
+    group_ids = list(snr_data_dict[first_win_id].keys())
+
     all_group_data = {}
-    for id in group_ids:
-        all_group_data[id] = []
+    for group_id in group_ids:
+        all_group_data[group_id] = []
 
-    for win_id , win_value in snr_data_dict.items():
+    # 遍历所有窗口，收集SNR数据
+    for win_id, win_value in snr_data_dict.items():
         group_data = _win_SNR_statistics(win_value)
 
         for group_id, group_value in group_data.items():
+            # 如果该组不在初始化的group_ids中，动态添加
+            if group_id not in all_group_data:
+                all_group_data[group_id] = []
             all_group_data[group_id].append(group_value)
 
     return all_group_data
