@@ -10,9 +10,10 @@
 - 🧠 **智能预处理**：陷波滤波、带通滤波、坏道检测、重参考等完整预处理流水线
 - 📊 **多维度评估**：幅度、标准差、信噪比、阻抗等多个质量指标
 - 📈 **TDigest 统计**：基于 TDigest 算法的概率统计，节省内存且精度高
-- 🎨 **可视化分析**：电极拓扑图、信号趋势图等多角度可视化
+- 🎨 **可视化分析**：电极拓扑图、信号趋势图（自动选择时间单位）等多角度可视化
 - 📄 **自动报告**：生成包含完整分析结果的专业 PDF 报告
 - ⚡ **智能加载**：根据硬件资源自动选择最优数据加载策略
+- ✅ **数据质量控制**：自动过滤坏窗口和坏通道，确保统计指标只基于有效数据
 
 ---
 
@@ -46,47 +47,49 @@ data_quality_evaluate/
 │
 └── src/                          # 源代码目录
     ├── __init__.py
-    ├── pipline.py                # 主流程入口，协调整个评估流程
-    ├── analyse.py                # 数据分析接口（统计/SNR分析）
+    ├── pipeline.py                # 主流程入口，协调整个评估流程
+    ├── analyse.py                 # 数据分析接口（统计/SNR分析/线噪声检测）
     │
-    ├── data_io/                  # 数据加载模块
+    ├── data_io/                   # 数据加载模块
     │   ├── __init__.py
-    │   └── dataParse.py          # 多格式数据解析器
-    │                               # 支持 wl/edf/dat 格式
-    │                               # 智能加载策略（全量/合并/分块）
+    │   └── dataParse.py           # 多格式数据解析器
+    │                                # 支持 wl/edf/dat 格式
+    │                                # 智能加载策略（全量/合并/分块）
     │
-    ├── preprocessing/            # 预处理模块
-    │   └── preprocessor.py       # 信号预处理流水线
-    │                               # - group(): 电极分组（uCortex/PSE）
-    │                               # - notch_filter(): 陷波滤波
-    │                               # - pass_filter(): 带通滤波
-    │                               # - bad_check(): 坏道检测
-    │                               # - re_reference(): 重参考
+    ├── preprocessing/             # 预处理模块
+    │   └── preprocessor.py        # 信号预处理流水线
+    │                                # - group(): 电极分组（uCortex/PSE）
+    │                                # - notch_filter(): 陷波滤波（50,100,150,200Hz）
+    │                                # - pass_filter(): 带通滤波（1-200Hz）
+    │                                # - bad_check(): 坏道检测（std>100）
+    │                                # - re_reference(): 重参考
+    │                                # - line_noise_detect(): 线噪声检测
     │
-    ├── metrics/                  # 指标计算模块
+    ├── metrics/                   # 指标计算模块
     │   ├── __init__.py
-    │   ├── statistics.py         # 基于 TDigest 的概率统计
-    │   ├── calc_snr.py           # 信噪比计算（LFP方法）
-    │   └── statisticsAggregator.py  # 跨窗口统计聚合
+    │   ├── statistics.py          # 窗口级统计（Welford + TDigest）
+    │   ├── welford_statistics.py  # Welford 在线统计算法
+    │   ├── calc_snr.py            # 信噪比计算（LFP方法）
+    │   └── statisticsAggregator.py # 跨窗口统计聚合（保存掩码）
     │
-    ├── report/                   # 报告生成模块
-    │   ├── extractReportFeatures.py  # 报告特征提取
-    │   └── report_generator.py      # PDF 报告生成器
+    ├── report/                    # 报告生成模块
+    │   ├── extractReportFeatures.py # 报告特征提取（分离绘图和统计数据）
+    │   └── report_generator.py    # PDF 报告生成器
     │
-    ├── visualize/                # 可视化模块
+    ├── visualize/                 # 可视化模块
     │   ├── __init__.py
-    │   └── visualizer.py         # 绘图工具类
-    │                               # - plot_ch_win_mean(): 均值趋势图
-    │                               # - plot_ch_win_std(): 标准差趋势图
-    │                               # - plot_electrode_topology_mask(): 拓扑图
+    │   └── visualizer.py          # 绘图工具类
+    │                                # - plot_ch_win_mean(): 均值趋势图（自动时间单位）
+    │                                # - plot_ch_win_std(): 标准差趋势图（自动时间单位）
+    │                                # - plot_electrode_topology_mask(): 拓扑图
     │
-    └── utils/                    # 工具模块
+    └── utils/                     # 工具模块
         ├── __init__.py
-        ├── hardware_resources.py     # 硬件资源检测（CPU/内存/磁盘）
-        ├── filesProcess.py           # 文件处理工具
-        ├── ECOGLoader.py             # 旧版数据加载器
-        ├── brpylib.py                # Blackrock (.nsX) 格式支持
-        └── importrhdutilities.py     # Intan RHD (.wl) 格式支持
+        ├── hardware_resources.py  # 硬件资源检测（CPU/内存/磁盘）
+        ├── filesProcess.py        # 文件处理工具
+        ├── ECOGLoader.py          # 数据加载器
+        ├── brpylib.py             # Blackrock (.nsX) 格式支持
+        └── importrhdutilities.py  # Intan RHD (.wl) 格式支持
 ```
 
 ---
@@ -133,24 +136,49 @@ python pipeline.py
     ↓
 批次数据迭代器
     ↓
-[Analyse] 分窗口 + [Preprocessor] 预处理
-    ├─ notch_filter() (50,100,150,200Hz)
-    ├─ pass_filter() (1-200Hz)
-    ├─ bad_check() (std>100 or 阻抗>1MΩ)
-    └─ re_reference() (平均参考)
+[Analyse] 分窗口处理 + [Preprocessor] 预处理
+    ├─ handle_statistics(): 5秒窗口，无重叠
+    │   ├─ group(): 电极分组（uCortex: 128ch/group, PSE: 4ch/group）
+    │   ├─ notch_filter(): 陷波滤波（50,100,150,200Hz）
+    │   ├─ pass_filter(): 带通滤波（1-200Hz）
+    │   ├─ bad_check(): 坏道检测（std>100）→ win_check_mask, ch_check_mask
+    │   └─ re_reference(): 平均参考
+    │
+    ├─ handle_snr(): 60秒窗口，重叠30秒
+    │   └─ compute_single_window_snr(): SNR计算（LFP方法）
+    │
+    └─ handle_line_noise_detection(): 1秒窗口，最多30秒
+        └─ line_noise_detect(): 线噪声检测（FFT分析）
     ↓
-[Statistics] TDigest 概率统计
-[CalcSnr] 信噪比计算
+[Statistics] 窗口级统计
+    ├─ WelfordArray: 在线计算均值/标准差
+    └─ TDigest: 计算百分位数
     ↓
 [StatisticsAggregator] 跨窗口聚合
+    ├─ 保存掩码: all_win_check_mask, all_ch_check_mask, all_win_ch_check_mask
+    ├─ 保存统计: all_win_welford, all_win_tdigest
+    └─ 跨窗口合并 TDigest
     ↓
-[ExtractReportFeatures] 特征提取
-    ├─ 幅度统计 (min/max/mean/median/variability/百分位数)
-    ├─ 标准差统计
-    ├─ SNR 统计
-    └─ 阻抗统计
+[ExtractReportFeatures] 特征提取（分离绘图和统计）
+    ├─ compute_ch_win_mean():
+    │   ├─ all_group_ch_win_means: 所有窗口的所有通道 → 用于绘图
+    │   └─ valid_group_ch_win_means: 有效窗口的好通道 → 用于统计
+    │
+    ├─ compute_ch_win_std():
+    │   ├─ all_group_ch_win_stds: 所有窗口的所有通道 → 用于绘图
+    │   └─ valid_group_ch_win_stds: 有效窗口的好通道 → 用于统计
+    │
+    ├─ _compute_cross_win(): 跨窗口合并 TDigest（只合并有效窗口）
+    └─ generate_report_statistics():
+        ├─ amp: 幅度统计（基于 TDigest）
+        ├─ std: 标准差统计（基于 valid_group_ch_win_stds）
+        ├─ mean: 均值统计（基于 valid_group_ch_win_means）
+        └─ impedence: 阻抗统计
     ↓
 [Visualizer] 生成可视化图像
+    ├─ plot_ch_win_mean(): 均值趋势图（自动选择时间单位：s/min）
+    ├─ plot_ch_win_std(): 标准差趋势图（自动选择时间单位：s/min）
+    └─ plot_electrode_topology_mask(): 电极拓扑图
     ↓
 [PDFReportGenerator] 生成 PDF 报告
     ↓
