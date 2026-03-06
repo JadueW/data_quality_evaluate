@@ -35,9 +35,17 @@ class Visualizer:
 
         # 计算时间轴（如果提供了timepoints和fs）
         if timepoints is not None and fs is not None:
-            time_axis = np.arange(n_windows) * timepoints / fs
-            xlabel = 'Time (s)'
-            title_time = f' ({n_windows * timepoints / fs:.1f} s)'
+            total_duration_seconds = n_windows * timepoints / fs
+
+            # 自动选择时间单位：>= 60秒使用分钟，否则使用秒
+            if total_duration_seconds >= 60:
+                time_axis = np.arange(n_windows) * timepoints / fs / 60  # 转换为分钟
+                xlabel = 'Time (min)'
+                title_time = f' ({total_duration_seconds / 60:.1f} min)'
+            else:
+                time_axis = np.arange(n_windows) * timepoints / fs  # 使用秒
+                xlabel = 'Time (s)'
+                title_time = f' ({total_duration_seconds:.1f} s)'
         else:
             time_axis = range(n_windows)
             xlabel = 'Window Index'
@@ -99,9 +107,17 @@ class Visualizer:
 
         # 计算时间轴（如果提供了timepoints和fs）
         if timepoints is not None and fs is not None:
-            time_axis = np.arange(n_windows) * timepoints / fs
-            xlabel = 'Time (s)'
-            title_time = f' ({n_windows * timepoints / fs:.1f} s)'
+            total_duration_seconds = n_windows * timepoints / fs
+
+            # 自动选择时间单位：>= 60秒使用分钟，否则使用秒
+            if total_duration_seconds >= 60:
+                time_axis = np.arange(n_windows) * timepoints / fs / 60  # 转换为分钟
+                xlabel = 'Time (min)'
+                title_time = f' ({total_duration_seconds / 60:.1f} min)'
+            else:
+                time_axis = np.arange(n_windows) * timepoints / fs  # 使用秒
+                xlabel = 'Time (s)'
+                title_time = f' ({total_duration_seconds:.1f} s)'
         else:
             time_axis = range(n_windows)
             xlabel = 'Window Index'
