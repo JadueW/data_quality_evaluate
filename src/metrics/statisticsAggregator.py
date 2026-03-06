@@ -39,6 +39,8 @@ class StatisticsAggregator:
                     all_group_statistics_data[group_id] = {
                         'all_win_check_mask': [],
                         'all_ch_check_mask': [False] * n_channels,
+                        # 每个窗口每个通道的掩码：[窗口][通道]
+                        'all_win_ch_check_mask': [],
                         # Welford 统计量：每个通道保存每个窗口的 WelfordArray
                         'all_win_welford': [[] for _ in range(n_channels)],
                         # TDigest 统计量：每个通道保存每个窗口的 TDigest
@@ -49,6 +51,9 @@ class StatisticsAggregator:
 
                 # 聚合窗口质量掩码
                 group_data['all_win_check_mask'].append(data['win_check_mask'])
+
+                # 保存每个窗口的通道掩码（用于后续过滤）
+                group_data['all_win_ch_check_mask'].append(data['ch_check_mask'])
 
                 # 聚合通道质量掩码（使用 OR 操作）
                 current_ch_mask = group_data['all_ch_check_mask']

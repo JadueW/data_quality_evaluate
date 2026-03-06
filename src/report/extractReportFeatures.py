@@ -221,13 +221,18 @@ class ExtractReportFeatures:
     def generate_report_statistics(self):
         """
         为每个 group_id 生成独立的统计报告
-        :return: 字典 {group_id: report_data}
+
+        Returns:
+            all_report_data: 字典 {group_id: report_data}
+            all_group_ch_win_means: 所有窗口的均值数据，用于绘图
+            all_group_ch_win_stds: 所有窗口的标准差数据，用于绘图
         """
 
         all_group_values = self._compute_report_statistics()
 
-        all_group_ch_win_means = self.compute_ch_win_mean()
-        all_group_ch_win_stds = self.compute_ch_win_std()
+        # 分别获取所有窗口和有效窗口的数据
+        all_group_ch_win_means, valid_group_ch_win_means = self.compute_ch_win_mean()
+        all_group_ch_win_stds, valid_group_ch_win_stds = self.compute_ch_win_std()
 
         all_report_data = {}
 
@@ -267,7 +272,7 @@ class ExtractReportFeatures:
                 "99%": float(p99)
             })
 
-            means_array = all_group_ch_win_means.get(group_id, [])
+            means_array = valid_group_ch_win_means.get(group_id, [])
 
             if len(means_array) > 0:
                 # 将嵌套列表展平为一维数组
@@ -288,7 +293,7 @@ class ExtractReportFeatures:
                     "99%": float(np.percentile(means_array_flat, 99))
                 })
 
-            stds_array = all_group_ch_win_stds.get(group_id, [])
+            stds_array = valid_group_ch_win_stds.get(group_id, [])
 
             if len(stds_array) > 0:
                 # 将嵌套列表展平为一维数组
@@ -330,29 +335,51 @@ class ExtractReportFeatures:
 
             all_report_data[group_id] = report_data
 
-        return all_report_data
+        return all_report_data, all_group_ch_win_means, all_group_ch_win_stds
 
     def compute_ch_win_mean(self):
+        """
+        计算每个通道每个窗口的均值
 
+        Returns:
+            all_group_ch_win_means: 包含所有窗口（包括坏窗口），用于绘图
+            valid_group_ch_win_means: 只包含有效窗口的好通道，用于统计分析
+        """
         all_group_ch_win_means = {}
+        valid_group_ch_win_means = {}
+
         for group_id, group_values in self.all_group_statistics_data.items():
-            ch_win_means = []
+            all_ch_win_means = []      # 所有窗口
+            valid_ch_win_means = []    # 只包含有效窗口的好通道
+
             all_win_welford = group_values["all_win_welford"]
             all_win_check_mask = group_values["all_win_check_mask"]
+            all_win_ch_check_mask = group_values["all_win_ch_check_mask"]  # 每个窗口每个通道的掩码
 
             for ch_idx in range(len(all_win_welford)):
                 channel_welford = all_win_welford[ch_idx]
-                channel_means = []
+                all_channel_means = []      # 所有窗口
+                valid_channel_means = []    # 只包含有效窗口的好通道
 
                 for win_idx, welford_stat in enumerate(channel_welford):
+                    # 对于所有窗口（用于绘图），只要有数据就添加
+                    if welford_stat.count > 0:
+                        all_channel_means.append(welford_stat.mean)
+
+                    # 对于有效窗口的好通道（用于统计）
+                    # 同时检查：窗口是否有效 && 通道是否有效
                     win_status = all_win_check_mask[win_idx]
-                    if win_status and welford_stat.count > 0:
-                        channel_means.append(welford_stat.mean)
+                    ch_status = all_win_ch_check_mask[win_idx][ch_idx]
+                    if win_status and ch_status and welford_stat.count > 0:
+                        valid_channel_means.append(welford_stat.mean)
 
-                ch_win_means.append(channel_means)
-            all_group_ch_win_means[group_id] = ch_win_means
+                all_ch_win_means.append(all_channel_means)
+                valid_ch_win_means.append(valid_channel_means)
 
-        return all_group_ch_win_means
+            all_group_ch_win_means[group_id] = all_ch_win_means
+            valid_group_ch_win_means[group_id] = valid_ch_win_means
+
+        return all_group_ch_win_means, valid_group_ch_win_means
 
     def _compute_dgigest_mean(self, centroids_list) -> float:
         total_weight = 0
@@ -365,23 +392,45 @@ class ExtractReportFeatures:
         return mean_value
 
     def compute_ch_win_std(self):
+        """
+        计算每个通道每个窗口的标准差
 
+        Returns:
+            all_group_ch_win_std: 包含所有窗口（包括坏窗口），用于绘图
+            valid_group_ch_win_std: 只包含有效窗口，用于统计分析
+        """
         all_group_ch_win_std = {}
+        valid_group_ch_win_std = {}
+
         for group_id, group_values in self.all_group_statistics_data.items():
-            ch_win_std = []
+            all_ch_win_std = []      # 所有窗口
+            valid_ch_win_std = []    # 只包含有效窗口
+
             all_win_welford = group_values["all_win_welford"]
             all_win_check_mask = group_values["all_win_check_mask"]
+            all_win_ch_check_mask = group_values["all_win_ch_check_mask"]  # 每个窗口每个通道的掩码
 
             for ch_idx in range(len(all_win_welford)):
                 channel_welford = all_win_welford[ch_idx]
-                channel_std = []
+                all_channel_std = []      # 所有窗口
+                valid_channel_std = []    # 只包含有效窗口的好通道
 
                 for win_idx, welford_stat in enumerate(channel_welford):
+                    # 对于所有窗口（用于绘图），只要有数据就添加
+                    if welford_stat.count > 0:
+                        all_channel_std.append(welford_stat.std)
+
+                    # 对于有效窗口的好通道（用于统计）
+                    # 同时检查：窗口是否有效 && 通道是否有效
                     win_status = all_win_check_mask[win_idx]
-                    if win_status and welford_stat.count > 0:
-                        channel_std.append(welford_stat.std)
+                    ch_status = all_win_ch_check_mask[win_idx][ch_idx]
+                    if win_status and ch_status and welford_stat.count > 0:
+                        valid_channel_std.append(welford_stat.std)
 
-                ch_win_std.append(channel_std)
-            all_group_ch_win_std[group_id] = ch_win_std
+                all_ch_win_std.append(all_channel_std)
+                valid_ch_win_std.append(valid_channel_std)
 
-        return all_group_ch_win_std
+            all_group_ch_win_std[group_id] = all_ch_win_std
+            valid_group_ch_win_std[group_id] = valid_ch_win_std
+
+        return all_group_ch_win_std, valid_group_ch_win_std
