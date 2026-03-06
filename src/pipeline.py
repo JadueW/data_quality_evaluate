@@ -108,7 +108,8 @@ if __name__ == '__main__':
     all_line_noise = None
 
     last_datasets = None
-    SNR_data_dict = None
+    SNR_data_dict = {}
+    snr_win_counter = 0
 
 
     for datasets in tqdm(dataloader, desc="Processing datasets", mininterval=0.5):
@@ -127,7 +128,11 @@ if __name__ == '__main__':
             all_statistics[win_counter] = win_group_statistics
             win_counter += 1
 
-        SNR_data_dict = handle_snr(datasets)
+        # 累积SNR数据
+        current_snr_data = handle_snr(datasets)
+        for win_id, win_value in current_snr_data.items():
+            SNR_data_dict[snr_win_counter] = win_value
+            snr_win_counter += 1
 
         if not is_detect_line_noise:
             all_line_noise = handle_line_noise_detection(datasets)

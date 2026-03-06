@@ -11,7 +11,7 @@ class Visualizer:
         用来绘制电极拓扑图、以及信号变化趋势图（mean，std）
      """
     @classmethod
-    def plot_ch_win_mean(cls,all_group_ch_win_means,group_id=None,offset=5,**kwargs):
+    def plot_ch_win_mean(cls,all_group_ch_win_means,group_id=None,offset=8,**kwargs):
         if group_id is None:
             group_id = list(all_group_ch_win_means.keys())[0]
 
