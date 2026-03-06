@@ -151,10 +151,7 @@ if __name__ == '__main__':
     print("阶段3：生成 report_data")
 
     erf = ExtractReportFeatures(all_group_statistics_data, timepoints, fs, impedence)
-    all_report_data = erf.generate_report_statistics()
-
-    all_group_ch_win_means = erf.compute_ch_win_mean()
-    all_group_ch_win_std = erf.compute_ch_win_std()
+    all_report_data, all_group_ch_win_means, all_group_ch_win_stds = erf.generate_report_statistics()
 
     print("阶段3完成：指标计算完成")
 
@@ -245,7 +242,7 @@ if __name__ == '__main__':
             subbar.update(1)
 
             Visualizer.plot_ch_win_std(
-                all_group_ch_win_std,
+                all_group_ch_win_stds,
                 group_id=group_id,
                 timepoints=timepoints,
                 fs=fs,
