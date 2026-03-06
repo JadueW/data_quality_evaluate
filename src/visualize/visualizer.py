@@ -11,7 +11,19 @@ class Visualizer:
         用来绘制电极拓扑图、以及信号变化趋势图（mean，std）
      """
     @classmethod
-    def plot_ch_win_mean(cls,all_group_ch_win_means,group_id=None,offset=8,**kwargs):
+    def plot_ch_win_mean(cls, all_group_ch_win_means, group_id=None, offset=8,
+                        timepoints=None, fs=None, **kwargs):
+        """
+        绘制通道均值趋势图
+
+        Args:
+            all_group_ch_win_means: 所有组的通道-窗口均值数据
+            group_id: 要绘制的组 ID
+            offset: 通道偏移量
+            timepoints: 每个窗口的时间点数
+            fs: 采样率
+            **kwargs: 其他参数，包括 save_path
+        """
         if group_id is None:
             group_id = list(all_group_ch_win_means.keys())[0]
 
@@ -21,24 +33,35 @@ class Visualizer:
 
         fig, ax = plt.subplots(figsize=(12, 8))
 
+        # 计算时间轴（如果提供了timepoints和fs）
+        if timepoints is not None and fs is not None:
+            time_axis = np.arange(n_windows) * timepoints / fs
+            xlabel = 'Time (s)'
+            title_time = f' ({n_windows * timepoints / fs:.1f} s)'
+        else:
+            time_axis = range(n_windows)
+            xlabel = 'Window Index'
+            title_time = ''
+
         for ch_idx in range(n_channels):
             means = np.array(ch_win_means[ch_idx])
             offset_values = means + ch_idx * offset
-            ax.plot(range(n_windows), offset_values, linewidth=0.8, alpha=0.7)
+            ax.plot(time_axis, offset_values, linewidth=0.8, alpha=0.7)
 
-        ax.set_xlabel('Window Index', fontsize=18)
+        ax.set_xlabel(xlabel, fontsize=18)
         ax.set_ylabel('Channel', fontsize=18)
-        ax.set_title(f'Channel Mean Trends Over Windows - Group: {group_id}', fontsize=18)
+        ax.set_title(f'Channel Mean Trends Over Windows - Group: {group_id}{title_time}', fontsize=18)
         ax.set_yticks([i * offset for i in range(n_channels)])
         ax.set_yticklabels([f'Ch{i}' for i in range(n_channels)])
 
         plt.tight_layout()
-        plt.savefig(kwargs.get('save_path',"./signal_trends_mean.png"),dpi=600)
+        plt.savefig(kwargs.get('save_path', "./signal_trends_mean.png"), dpi=600)
 
         return fig
 
     @classmethod
-    def plot_ch_win_std(cls, all_group_ch_win_std, group_id=None, offset=None, **kwargs):
+    def plot_ch_win_std(cls, all_group_ch_win_std, group_id=None, offset=None,
+                       timepoints=None, fs=None, **kwargs):
         """
         绘制通道标准差趋势图
 
@@ -46,6 +69,8 @@ class Visualizer:
             all_group_ch_win_std: 所有组的通道-窗口标准差数据
             group_id: 要绘制的组 ID
             offset: 通道偏移量，如果为 None 则自动计算（默认为标准差范围的 3 倍）
+            timepoints: 每个窗口的时间点数
+            fs: 采样率
             **kwargs: 其他参数，包括 save_path
         """
         if group_id is None:
@@ -72,16 +97,26 @@ class Visualizer:
             else:
                 offset = 5.0
 
+        # 计算时间轴（如果提供了timepoints和fs）
+        if timepoints is not None and fs is not None:
+            time_axis = np.arange(n_windows) * timepoints / fs
+            xlabel = 'Time (s)'
+            title_time = f' ({n_windows * timepoints / fs:.1f} s)'
+        else:
+            time_axis = range(n_windows)
+            xlabel = 'Window Index'
+            title_time = ''
+
         fig, ax = plt.subplots(figsize=(12, 8))
 
         for ch_idx in range(n_channels):
             std = np.array(ch_win_std[ch_idx])
             offset_values = std + ch_idx * offset
-            ax.plot(range(n_windows), offset_values, linewidth=0.8, alpha=0.7)
+            ax.plot(time_axis, offset_values, linewidth=0.8, alpha=0.7)
 
-        ax.set_xlabel('Window Index', fontsize=18)
+        ax.set_xlabel(xlabel, fontsize=18)
         ax.set_ylabel('Channel', fontsize=18)
-        ax.set_title(f'Channel Std Trends Over Windows - Group: {group_id}', fontsize=18)
+        ax.set_title(f'Channel Std Trends Over Windows - Group: {group_id}{title_time}', fontsize=18)
         ax.set_yticks([i * offset for i in range(n_channels)])
         ax.set_yticklabels([f'Ch{i}' for i in range(n_channels)])
 
