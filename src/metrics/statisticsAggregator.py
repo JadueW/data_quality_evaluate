@@ -1,15 +1,3 @@
-# -*- coding:utf-8 -*-
-# author:70706
-# datetime:2026/3/5
-# software: PyCharm
-"""
-    聚合统计结果
-
-    支持混合统计算法的聚合：
-    1. Welford 统计量：用于精确的均值和标准差计算
-    2. TDigest 统计量：用于百分位数计算
-"""
-
 from .welford_statistics import WelfordArray
 
 
@@ -18,23 +6,7 @@ class StatisticsAggregator:
         self.delta = delta
 
     def aggregation_all_statistics_data(self, all_statistics):
-        """
-        聚合所有窗口的统计结果
 
-        支持两种统计算法的聚合：
-        - Welford: 用于精确的均值和标准差
-        - TDigest: 用于百分位数
-
-        Args:
-            all_statistics: 所有窗口的统计数据
-
-        Returns:
-            聚合后的统计数据，包含：
-            - all_win_check_mask: 窗口质量掩码
-            - all_ch_check_mask: 通道质量掩码
-            - all_win_welford: Welford 统计量列表
-            - all_win_tdigest: TDigest 对象列表
-        """
         all_group_statistics_data = {}
 
         # 首先收集所有组的信息，并找出每个组在每个窗口中的最大通道数

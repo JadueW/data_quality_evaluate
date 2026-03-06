@@ -112,6 +112,8 @@ class ExtractReportFeatures:
     def _compute_cross_win(self):
         """
         跨组跨被试合并TDigest，最终输出形状保留了通道层面的TDigest对象
+        只合并有效窗口（win_check_mask=True）的TDigest
+
         all_group_channels_tdigest = {
             group_id_0: []   # n_channels
             group_id_1: []   # n_channels
@@ -122,6 +124,7 @@ class ExtractReportFeatures:
         all_group_channels_tdigest = {}
         for group_id, group_values in self.all_group_statistics_data.items():
             all_win_tdigest = group_values["all_win_tdigest"]
+            all_win_check_mask = group_values["all_win_check_mask"]
             n_channels = len(all_win_tdigest)
 
             n_channels_tdigest = []
@@ -130,9 +133,11 @@ class ExtractReportFeatures:
                 channel_tdigest = all_win_tdigest[ch_idx]
                 merged_tdigest = TDigest()
 
-                # 单通道跨窗口合并
+                # 单通道跨窗口合并（只合并有效窗口）
                 for win_idx in range(len(channel_tdigest)):
-                    merged_tdigest += channel_tdigest[win_idx]
+                    # 只合并有效窗口的TDigest
+                    if win_idx < len(all_win_check_mask) and all_win_check_mask[win_idx]:
+                        merged_tdigest += channel_tdigest[win_idx]
 
                 n_channels_tdigest.append(merged_tdigest)
             all_group_channels_tdigest[group_id] = n_channels_tdigest
@@ -146,6 +151,7 @@ class ExtractReportFeatures:
         优化版本：
         - 使用 Welford 统计量直接获取每个通道的均值和标准差
         - 使用 TDigest 计算幅度的百分位数
+        - 只统计有效窗口（win_check_mask=True）的数据
         """
         # 使用绝对导入
         from src.metrics.welford_statistics import WelfordStatistics
@@ -156,6 +162,7 @@ class ExtractReportFeatures:
         for group_id, channels_tdigest in all_group_channels_tdigest.items():
             group_values = self.all_group_statistics_data[group_id]
             all_win_welford = group_values["all_win_welford"]
+            all_win_check_mask = group_values["all_win_check_mask"]
 
             # 合并所有通道的 TDigest 用于幅度统计
             group_amp_digest = TDigest()
@@ -163,17 +170,21 @@ class ExtractReportFeatures:
                 group_amp_digest += ch_tdigest
 
             # 使用 Welford 统计量计算每个通道的均值和标准差
-            # 对每个通道的所有窗口统计进行合并
+            # 对每个通道的所有窗口统计进行合并（只合并有效窗口）
             all_channel_means = []
             all_channel_stds = []
 
             for ch_idx in range(len(all_win_welford)):
                 channel_welford_stats = all_win_welford[ch_idx]
 
-                # 合并该通道所有窗口的统计
+                # 合并该通道所有窗口的统计（只合并有效窗口）
                 merged_welford = WelfordStatistics()
-                for welford_stat in channel_welford_stats:
-                    if welford_stat.count > 0:
+                for win_idx, welford_stat in enumerate(channel_welford_stats):
+                    # 只合并有效窗口的Welford统计
+                    if (win_idx < len(all_win_check_mask) and
+                        all_win_check_mask[win_idx] and
+                        welford_stat.count > 0):
+
                         # 手动合并到新的 WelfordStatistics 对象
                         # 避免直接修改原始统计量
                         n1 = merged_welford.count

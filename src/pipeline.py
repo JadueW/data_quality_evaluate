@@ -238,6 +238,8 @@ if __name__ == '__main__':
             Visualizer.plot_ch_win_mean(
                 all_group_ch_win_means,
                 group_id=group_id,
+                timepoints=timepoints,
+                fs=fs,
                 save_path=trend1_image
             )
             subbar.update(1)
@@ -245,6 +247,8 @@ if __name__ == '__main__':
             Visualizer.plot_ch_win_std(
                 all_group_ch_win_std,
                 group_id=group_id,
+                timepoints=timepoints,
+                fs=fs,
                 save_path=trend2_image
             )
             subbar.update(1)
