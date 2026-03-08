@@ -90,16 +90,15 @@ def compute_single_window_snr(window_data, sample_rate, activity_threshold_std=3
         return None
 
     # 计算信号和噪声
-    high_activity_pp = np.mean([np.ptp(high_activity) for high_activity in high_activity_states
-                                if len(high_activity) > 0])
-    low_activity_rms = np.mean([np.sqrt(np.mean(low_activity ** 2)) for low_activity in low_activity_states
-                                if len(low_activity) > 0])
+    high_activity_pp = np.array([np.ptp(high_activity) for high_activity in high_activity_states
+                        if len(high_activity) > 0])
+    low_activity_rms = np.array([np.sqrt(np.mean(low_activity ** 2)) for low_activity in low_activity_states
+                        if len(low_activity) > 0])
 
     # 计算SNR（分贝）
-    if low_activity_rms > 0:
-        snr_db = 20 * np.log10(high_activity_pp / low_activity_rms)
-    else:
-        snr_db = np.nan
+
+    snr_db = 20 * np.log10(high_activity_pp / low_activity_rms)
+
 
     return {
         'snr': snr_db,
@@ -116,6 +115,7 @@ def _win_SNR_statistics(snr_data_win_dict):
         group_data[group_id] = group_value['win_SNR']
 
     return group_data
+
 
 def SNR_statistics(snr_data_dict):
     """
@@ -153,7 +153,6 @@ def SNR_statistics(snr_data_dict):
 
 
 def compute_snr_statistics(all_group_data):
-
     snr_group_statistics = {}
 
     for group_id, group_data in all_group_data.items():
