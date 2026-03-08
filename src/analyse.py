@@ -127,10 +127,8 @@ def handle_snr(batch_datasets):
             if is_good:
                 snr_info = compute_single_window_snr(v["processed_data"], pp.resample_fs)
                 # 并更新snr
-                if not np.all(snr_info):
-                    v.update({"win_SNR": snr_info["snr"]})
-                else:
-                    v.update({"win_SNR": np.zeros((pp.group_ch_num,))})
+                v.update({"win_SNR": snr_info["snr"]})
+
             else:
                 v.update({"win_SNR": np.zeros((pp.group_ch_num,))})
 
