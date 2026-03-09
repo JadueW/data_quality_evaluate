@@ -259,12 +259,7 @@ class DataParse(FileProcess):
                 all_data.append(self._parse_file(file_path))
         else:
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                futures = {executor.submit(self._parse_file, f): f for f in self.files}
-                for future in as_completed(futures):
-                    try:
-                        all_data.append(future.result())
-                    except Exception as e:
-                        print(f"加载文件失败: {futures[future]}, 错误: {e}")
+                batch_data_list = list(executor.map(self._parse_file, self.files))
 
         merged_dataset = {}
         all_datas = [d['data'] for d in all_data]
@@ -304,13 +299,7 @@ class DataParse(FileProcess):
                 batch_data_list = [self._parse_file(f) for f in batch_files]
             else:
                 with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                    futures = {executor.submit(self._parse_file, f): f for f in batch_files}
-                    batch_data_list = []
-                    for future in as_completed(futures):
-                        try:
-                            batch_data_list.append(future.result())
-                        except Exception as e:
-                            print(f"加载文件失败: {futures[future]}, 错误: {e}")
+                    batch_data_list = list(executor.map(self._parse_file, batch_files))
 
             merged_batch = {}
             batch_datas = [d['data'] for d in batch_data_list]
