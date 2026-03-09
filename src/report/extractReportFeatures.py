@@ -1,6 +1,6 @@
 
 import numpy as np
-from tdigest import TDigest
+from pytdigest import TDigest
 
 class ExtractReportFeatures:
     def __init__(self,all_group_statistics_data,timepoints,fs,impedence):
@@ -165,7 +165,7 @@ class ExtractReportFeatures:
             all_win_check_mask = group_values["all_win_check_mask"]
 
             # 合并所有通道的 TDigest 用于幅度统计
-            group_amp_digest = TDigest()
+            group_amp_digest = TDigest(compression=100)
             for ch_tdigest in channels_tdigest:
                 group_amp_digest += ch_tdigest
 
@@ -249,26 +249,27 @@ class ExtractReportFeatures:
             report_data["bad_ratio"] = float(bad_ratio)
 
             amp_digest = group_data["amp_digest"]
-            centroids = amp_digest.centroids_to_list()
 
-            amp_mean = self._compute_dgigest_mean(centroids)
-            p0 = amp_digest.percentile(0)
-            p100 = amp_digest.percentile(100)
+            # 使用 pytdigest 的 .mean 属性直接获取均值
+            # 注意：pytdigest 的 inverse_cdf 使用 0-1 范围，而不是 0-100
+            amp_mean = amp_digest.mean
+            p0 = amp_digest.inverse_cdf(0.0)
+            p100 = amp_digest.inverse_cdf(1.0)
 
-            p1 = max(p0, amp_digest.percentile(1))
-            p99 = min(p100, amp_digest.percentile(99))
+            p1 = max(p0, amp_digest.inverse_cdf(0.01))
+            p99 = min(p100, amp_digest.inverse_cdf(0.99))
 
             report_data["amp"].update({
                 "min": float(p0),
                 "max": float(p100),
                 "avg": float(amp_mean),
-                "median": float(amp_digest.percentile(50)),
+                "median": float(amp_digest.inverse_cdf(0.5)),
                 "variability": float(
-                    amp_digest.percentile(84) - amp_digest.percentile(16)
+                    amp_digest.inverse_cdf(0.84) - amp_digest.inverse_cdf(0.16)
                 ),
                 "1%": float(p1),
-                "5%": float(amp_digest.percentile(5)),
-                "95%": float(amp_digest.percentile(95)),
+                "5%": float(amp_digest.inverse_cdf(0.05)),
+                "95%": float(amp_digest.inverse_cdf(0.95)),
                 "99%": float(p99)
             })
 
@@ -368,16 +369,6 @@ class ExtractReportFeatures:
             valid_group_ch_win_means[group_id] = valid_ch_win_means
 
         return all_group_ch_win_means, valid_group_ch_win_means
-
-    def _compute_dgigest_mean(self, centroids_list) -> float:
-        total_weight = 0
-        total_value = 0
-        for i in range(len(centroids_list)):
-            total_weight += centroids_list[i]['c']
-            total_value += centroids_list[i]['c'] * centroids_list[i]['m']
-
-        mean_value = total_value / total_weight
-        return mean_value
 
     def compute_ch_win_std(self):
         """
