@@ -24,7 +24,7 @@ class DataParse(FileProcess):
         super().__init__(file_dir)
 
         self.file_dir = file_dir
-        self.elec_type = "PSE-4A" if file_dir.__contains__("对照组") else "μCortex0-07"
+        self.elec_type = "PSE" if file_dir.__contains__("对照组") else "uCortex"
 
         result = self._parse_folder_name()
         self.mapping = result["mapping"]

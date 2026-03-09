@@ -95,7 +95,7 @@ class Preprocessor:
             unsorted_imp = self.raw_data["impedence"][new_indices]
             # 取出mapping中固定数量的阻抗, 此时取出的映射为无序阻抗,需要重映射
             # 先按转接器重排
-            _remapped_imp  = unsorted_imp[self.connector_mapping]
+            _remapped_imp  = self.__re_mapping(unsorted_imp, self.connector_mapping)
 
 
             pse_ch_num = kwargs.get("pse_ch_num", 4)
