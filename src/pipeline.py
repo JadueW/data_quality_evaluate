@@ -4,9 +4,9 @@
 # software: PyCharm
 
 import os.path
-
 import numpy as np
 from tqdm import tqdm
+import json
 
 from src.analyse import handle_statistics, handle_snr, handle_line_noise_detection
 from src.data_io.dataParse import DataParse
@@ -237,6 +237,11 @@ if __name__ == '__main__':
 
             'notch_freqs': Preprocessor.notch_harmonics
         }
+
+        # pdf_results结果保存成json文件
+        json_file_name = f"pdf_results_group{group_id}.json"
+        with open(os.path.join(output_dir, json_file_name), 'w') as json_file:
+            json.dump(pdf_results, json_file)
 
         with tqdm(total=3, desc=f"Group {group_id} plotting",
                   leave=False) as subbar:
