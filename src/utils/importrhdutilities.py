@@ -28,7 +28,7 @@ def read_qstring(fid):
     if length == int('ffffffff', 16): return ""
 
     if length > (os.fstat(fid.fileno()).st_size - fid.tell() + 1):
-        print(length)
+        # print(length)
         raise Exception('Length too long.')
 
     # convert length from bytes to 16-bit Unicode words
@@ -62,9 +62,9 @@ def read_header(fid):
     (version['major'], version['minor']) = struct.unpack('<hh', fid.read(4))
     header['version'] = version
 
-    print('')
-    print('Reading Intan Technologies RHD2000 Data File, Version {}.{}'.format(version['major'], version['minor']))
-    print('')
+    # print('')
+    # print('Reading Intan Technologies RHD2000 Data File, Version {}.{}'.format(version['major'], version['minor']))
+    # print('')
 
     freq = {}
 
@@ -500,16 +500,16 @@ def load_file(filename):
     header = read_header(fid)
 
     # Output a summary of recorded data
-    print('Found {} amplifier channel{}.'.format(header['num_amplifier_channels'],
-                                                 plural(header['num_amplifier_channels'])))
+    # print('Found {} amplifier channel{}.'.format(header['num_amplifier_channels'],
+    #                                              plural(header['num_amplifier_channels'])))
     # print('Found {} auxiliary input channel{}.'.format(header['num_aux_input_channels'], plural(header['num_aux_input_channels'])))
     # print('Found {} supply voltage channel{}.'.format(header['num_supply_voltage_channels'], plural(header['num_supply_voltage_channels'])))
     # print('Found {} board ADC channel{}.'.format(header['num_board_adc_channels'], plural(header['num_board_adc_channels'])))
-    print('Found {} board digital input channel{}.'.format(header['num_board_dig_in_channels'],
-                                                           plural(header['num_board_dig_in_channels'])))
+    # print('Found {} board digital input channel{}.'.format(header['num_board_dig_in_channels'],
+    #                                                        plural(header['num_board_dig_in_channels'])))
     # print('Found {} board digital output channel{}.'.format(header['num_board_dig_out_channels'], plural(header['num_board_dig_out_channels'])))
     # print('Found {} temperature sensors channel{}.'.format(header['num_temp_sensor_channels'], plural(header['num_temp_sensor_channels'])))
-    print('')
+    # print('')
 
     # Determine how many samples the data file contains
     bytes_per_block = get_bytes_per_data_block(header)
@@ -538,17 +538,18 @@ def load_file(filename):
 
     # Output a summary of contents of header file
     if data_present:
-        print('File contains {:0.3f} seconds of data.  Amplifiers were sampled at {:0.2f} kS/s.'.format(record_time,
-                                                                                                        header[
-                                                                                                            'sample_rate'] / 1000))
+        pass
+        # print('File contains {:0.3f} seconds of data.  Amplifiers were sampled at {:0.2f} kS/s.'.format(record_time,
+        #                                                                                                 header[
+        #                                                                                                     'sample_rate'] / 1000))
     else:
-        print('Header file contains no data.  Amplifiers were sampled at {:0.2f} kS/s.'.format(
+        print('{} Header file contains no data.  Amplifiers were sampled at {:0.2f} kS/s.'.format(filename,
             header['sample_rate'] / 1000))
 
     if data_present:
         # Pre-allocate memory for data
-        print('')
-        print('Allocating memory for data...')
+        # print('')
+        # print('Allocating memory for data...')
 
         data = {}
         if (header['version']['major'] == 1 and header['version']['minor'] >= 2) or (header['version']['major'] > 1):
@@ -578,7 +579,7 @@ def load_file(filename):
         data['board_dig_out_raw'] = np.zeros(num_board_dig_out_samples, dtype=np.uint)
 
         # Read sampled data from file.
-        print('Reading data from file...')
+        # print('Reading data from file...')
 
         # Initialize indices used in looping
         indices = {}
@@ -604,10 +605,10 @@ def load_file(filename):
 
             fraction_done = 100 * (1.0 * i / num_data_blocks)
             if fraction_done >= percent_done:
-                print('{}% done...'.format(percent_done))
+                # print('{}% done...'.format(percent_done))
                 percent_done = percent_done + print_increment
 
-        print('100% done...')
+        # print('100% done...')
 
         # Make sure we have read exactly the right amount of data
         bytes_remaining = filesize - fid.tell()
