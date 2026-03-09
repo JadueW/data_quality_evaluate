@@ -314,18 +314,6 @@ class ExtractReportFeatures:
                     "99%": float(np.percentile(stds_array_flat, 99))
                 })
 
-                print(f"\n========== Group {group_id} 标准差统计结果 ==========")
-                print(f"最小值: {report_data['std']['min']:.6f}")
-                print(f"最大值: {report_data['std']['max']:.6f}")
-                print(f"平均值: {report_data['std']['avg']:.6f}")
-                print(f"中位数: {report_data['std']['median']:.6f}")
-                print(f"变异系数: {report_data['std']['variability']:.6f}")
-                print(f"1% 分位数: {report_data['std']['1%']:.6f}")
-                print(f"5% 分位数: {report_data['std']['5%']:.6f}")
-                print(f"95% 分位数: {report_data['std']['95%']:.6f}")
-                print(f"99% 分位数: {report_data['std']['99%']:.6f}")
-                print(f"有效样本数: {len(stds_array_flat)}")
-                print("=" * 50)
 
             report_data["ch_win_means"] = \
                 all_group_ch_win_means.get(group_id, [])
