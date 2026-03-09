@@ -263,7 +263,7 @@ class DataParse(FileProcess):
                 all_data.append(self._parse_file(file_path))
         else:
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                batch_data_list = list(executor.map(self._parse_file, self.files))
+                all_data = list(executor.map(self._parse_file, self.files))
 
         merged_dataset = {}
         all_datas = [d['data'] for d in all_data]
