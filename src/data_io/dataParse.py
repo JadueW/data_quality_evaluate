@@ -31,6 +31,7 @@ class DataParse(FileProcess):
         self.impedence = result["impedence"]
         self.subject_id = result["subject_id"]
         self.date = result["date"]
+        self.impedence_file = result["impedence_file"]
 
         # 缓存数据文件并自动判断格式
         self.files = [os.path.join(self.file_dir, f) for f in os.listdir(self.file_dir)
@@ -63,6 +64,7 @@ class DataParse(FileProcess):
             raise FileNotFoundError(f"未找到阻抗文件: 文件名需包含'impedence'")
         imp_data = pd.read_csv(os.path.join(self.file_dir, impedence_file))
         result['impedence'] = np.array(imp_data['Impedance Magnitude at 1000 Hz (ohms)'])
+        result['impedence_file'] = imp_data
 
         # 获取mapping
         mapping_file = None
@@ -207,6 +209,7 @@ class DataParse(FileProcess):
         datasets['ele_type'] = self.elec_type
         datasets['subject_id'] = self.subject_id
         datasets['date'] = self.date
+        datasets['impedence_file'] = self.impedence_file
 
         return datasets
 
@@ -222,6 +225,7 @@ class DataParse(FileProcess):
         datasets['ele_type'] = self.elec_type
         datasets['subject_id'] = self.subject_id
         datasets['date'] = self.date
+        datasets['impedence_file'] = self.impedence_file
 
         return datasets
 
