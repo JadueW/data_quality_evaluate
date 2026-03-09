@@ -4,6 +4,8 @@
 # software: PyCharm
 
 import os.path
+
+import numpy as np
 from tqdm import tqdm
 
 from src.analyse import handle_statistics, handle_snr, handle_line_noise_detection
@@ -171,6 +173,13 @@ if __name__ == '__main__':
             mininterval=0.3
     ):
 
+        impedence_group = Preprocessor.impedence[group_id]
+        impedence_group_range = {
+            "min": np.min(impedence_group),
+            "max": np.max(impedence_group),
+            "avg": np.mean(impedence_group)
+        }
+
         total_ch, bad_ch, bad_ratio, valid_length, elec_topo = \
             erf._compute_win_ch(group_id)
 
@@ -208,7 +217,7 @@ if __name__ == '__main__':
             'amp': report_data['amp'],
             'std': report_data['std'],
             'snr_range': snr_group_statistic,
-            'impedence_range': report_data['impedence_range'],
+            'impedence_range': impedence_group_range,
 
             'n_channels': total_channels,
             'sample_rate': fs,
