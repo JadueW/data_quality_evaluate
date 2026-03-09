@@ -63,7 +63,10 @@ class DataParse(FileProcess):
         if impedence_file is None:
             raise FileNotFoundError(f"未找到阻抗文件: 文件名需包含'impedence'")
         imp_data = pd.read_csv(os.path.join(self.file_dir, impedence_file))
-        result['impedence'] = np.array(imp_data['Impedance Magnitude at 1000 Hz (ohms)'])
+        if imp_data.__contains__("Impedance Magnitude at 1000 Hz (ohms)"):
+            result['impedence'] = np.array(imp_data['Impedance Magnitude at 1000 Hz (ohms)'])
+        else:
+            result['impedence'] = np.array(imp_data['Magnitude'])
         result['impedence_file'] = imp_data
 
         # 获取mapping
