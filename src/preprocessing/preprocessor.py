@@ -10,12 +10,15 @@ from mne.filter import filter_data
 
 class Preprocessor:
     notch_harmonics = [50, 100, 150, 200]
+    impedence = {}
+
     def __init__(self, raw_data):
         self.raw_data = raw_data
         self.group_ch_num = None
         self.grouped_data = None
         self.fs = self.raw_data.get("fs", None)
         self.resample_fs = None
+        self.connector_mapping = None
         if not self.fs:
             raise AssertionError("未获取到采样频率fs")
         self.harmonics = Preprocessor.notch_harmonics
@@ -60,6 +63,15 @@ class Preprocessor:
 
                 # 重映射
                 _remapped_data = self.__re_mapping(data[s:e, ...], mapping)
+                # 对阻抗也需要重映射
+                impedence_file = self.raw_data["impedence_file"]
+                raw_ch_no = np.array(impedence_file["Channel Number"])
+                _, new_indices = self.__impedence_file_check(raw_ch_no[s:e])
+                # 对阻抗重排
+                unsorted_imp = self.raw_data["impedence"][new_indices]
+                # 取出mapping中固定数量的阻抗, 此时取出的映射为无序阻抗,需要重映射
+                _remapped_imp  =self.__re_mapping(unsorted_imp, mapping)
+                Preprocessor.impedence.update({i:_remapped_imp})
 
                 grouped_data.append(_remapped_data)
 
@@ -68,12 +80,23 @@ class Preprocessor:
             assert total_chs == 128, f"接华科电极时，预期数据通道数为128，得到{total_chs}个通道"
 
             # 如果是华科电极，需要先确定转接器的映射
-            connector_mapping = kwargs.get("connector_mapping", None)
-            if not connector_mapping:
-                connector_mapping = np.arange(128).reshape((16, 8))
+            self.connector_mapping = kwargs.get("connector_mapping", None)
+            if self.connector_mapping is None:
+                self.connector_mapping = np.arange(128).reshape((16, 8))
 
             # 先根据转接器调整顺序
-            data = self.__re_mapping(data, connector_mapping)
+            data = self.__re_mapping(data, self.connector_mapping)
+
+            # 对阻抗也需要重映射
+            impedence_file = self.raw_data["impedence_file"]
+            raw_ch_no = np.array(impedence_file["Channel Number"])
+            _, new_indices = self.__impedence_file_check(raw_ch_no)
+            # 对阻抗重排
+            unsorted_imp = self.raw_data["impedence"][new_indices]
+            # 取出mapping中固定数量的阻抗, 此时取出的映射为无序阻抗,需要重映射
+            # 先按转接器重排
+            _remapped_imp  = unsorted_imp[self.connector_mapping]
+
 
             pse_ch_num = kwargs.get("pse_ch_num", 4)
             pse_num = kwargs.get("pse_num", 1)
@@ -91,15 +114,34 @@ class Preprocessor:
                 pse_order = pse_order - 1
 
             # 再依次选取各组数据
-            for i_rng in pse_order:
+            for gid, i_rng in enumerate(pse_order):
                 s, e = i_rng[0], i_rng[1]
                 _remapped_data = self.__re_mapping(data[s:e, :], mapping)
                 grouped_data.append(_remapped_data)
+                # 依次取各组阻抗
+                Preprocessor.impedence.update({gid: _remapped_imp[s:e]})
 
         else:
             raise AssertionError(f"目前只接受两种电极类型, 分别为pse和uCortex, 得到了一个{ele_type}类型")
         self.grouped_data = grouped_data
         return self.grouped_data
+
+    def __impedence_file_check(self, raw_channel_number):
+        """
+        检查阻抗文件，通道排序，并给出原始索引序列。
+        """
+        raw_channel_number = list(raw_channel_number)
+        # 对raw_ch_no排序
+        # 1. 绑定元素与原始索引（enumerate返回 (索引, 元素) 元组）
+        indexed_list = list(enumerate(raw_channel_number))
+
+        # 2. 按元素值排序（key指定按元组第二个元素排序）
+        sorted_list = sorted(indexed_list, key=lambda x: x[1])
+
+        # 3. 提取排序后的元素和原始索引
+        sorted_values = [item[1] for item in sorted_list]
+        original_indices = [item[0] for item in sorted_list]
+        return sorted_values, original_indices
 
     def __re_mapping(self, data, new_mapping):
         """
