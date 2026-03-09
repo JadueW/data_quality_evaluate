@@ -31,6 +31,7 @@ class DataParse(FileProcess):
         self.impedence = result["impedence"]
         self.subject_id = result["subject_id"]
         self.date = result["date"]
+        self.impedence_file = result["impedence_file"]
 
         # 缓存数据文件并自动判断格式
         self.files = [os.path.join(self.file_dir, f) for f in os.listdir(self.file_dir)
@@ -63,6 +64,7 @@ class DataParse(FileProcess):
             raise FileNotFoundError(f"未找到阻抗文件: 文件名需包含'impedence'")
         imp_data = pd.read_csv(os.path.join(self.file_dir, impedence_file))
         result['impedence'] = np.array(imp_data['Impedance Magnitude at 1000 Hz (ohms)'])
+        result['impedence_file'] = imp_data
 
         # 获取mapping
         mapping_file = None
@@ -207,6 +209,7 @@ class DataParse(FileProcess):
         datasets['ele_type'] = self.elec_type
         datasets['subject_id'] = self.subject_id
         datasets['date'] = self.date
+        datasets['impedence_file'] = self.impedence_file
 
         return datasets
 
@@ -222,6 +225,7 @@ class DataParse(FileProcess):
         datasets['ele_type'] = self.elec_type
         datasets['subject_id'] = self.subject_id
         datasets['date'] = self.date
+        datasets['impedence_file'] = self.impedence_file
 
         return datasets
 
@@ -259,12 +263,7 @@ class DataParse(FileProcess):
                 all_data.append(self._parse_file(file_path))
         else:
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                futures = {executor.submit(self._parse_file, f): f for f in self.files}
-                for future in as_completed(futures):
-                    try:
-                        all_data.append(future.result())
-                    except Exception as e:
-                        print(f"加载文件失败: {futures[future]}, 错误: {e}")
+                batch_data_list = list(executor.map(self._parse_file, self.files))
 
         merged_dataset = {}
         all_datas = [d['data'] for d in all_data]
@@ -304,13 +303,7 @@ class DataParse(FileProcess):
                 batch_data_list = [self._parse_file(f) for f in batch_files]
             else:
                 with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                    futures = {executor.submit(self._parse_file, f): f for f in batch_files}
-                    batch_data_list = []
-                    for future in as_completed(futures):
-                        try:
-                            batch_data_list.append(future.result())
-                        except Exception as e:
-                            print(f"加载文件失败: {futures[future]}, 错误: {e}")
+                    batch_data_list = list(executor.map(self._parse_file, batch_files))
 
             merged_batch = {}
             batch_datas = [d['data'] for d in batch_data_list]
