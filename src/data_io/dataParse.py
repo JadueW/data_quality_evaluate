@@ -247,10 +247,10 @@ class DataParse(FileProcess):
     def __parse_wl(self, wl_file):
         """解析 .对照组wl 格式文件"""
         data, data_present = load_file(wl_file)
-        repaired_data = self.check_data(data,[4,5,6,8,9,10,11,12])
+        # repaired_data = self.check_data(data,[4,5,6,8,9,10,11,12])
         datasets = {}
 
-        datasets['data'] = repaired_data
+        datasets['data'] = data
         datasets['impedence'] = self.impedence / 1000.0
         datasets['fs'] = data['frequency_parameters']['amplifier_sample_rate']
         datasets['mapping'] = self.mapping
