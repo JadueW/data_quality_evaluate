@@ -77,7 +77,20 @@ class DataParse(FileProcess):
                 break
         if mapping_file is None:
             raise FileNotFoundError(f"未找到映射文件: 文件名需包含'{self.elec_type}'")
-        result['mapping'] = np.loadtxt(os.path.join(self.file_dir, mapping_file),dtype=int,delimiter=",")
+
+        mapping_path = os.path.join(self.file_dir, mapping_file)
+        try:
+            # 方法1：使用 pandas 读取，自动处理空值
+            mapping_df = pd.read_csv(mapping_path, header=None)
+            mapping_df = mapping_df.dropna(axis=1, how='all')
+            result['mapping'] = mapping_df.values.astype(int)
+        except Exception as e:
+            try:
+                result['mapping'] = np.genfromtxt(mapping_path, dtype=int, delimiter=',', invalid_raise=False)
+                if result['mapping'].ndim == 1 and len(result['mapping']) == 128:
+                    result['mapping'] = result['mapping'].reshape((16, 8))
+            except Exception as e2:
+                raise ValueError(f"无法读取映射文件 {mapping_file}: {e}, {e2}")
 
         return result
 
@@ -200,12 +213,44 @@ class DataParse(FileProcess):
         else:
             raise ValueError(f"不支持的文件格式: {file_ext}")
 
+    def check_data(self,data,ch_idx):
+        """
+        针对非标数据,需要每次手动修改
+        :param data:
+        :param ch_idx: 单个通道或者通道列表
+        :return:
+        """
+        check_data = data['amplifier_data']
+        n_channels =check_data.shape[0]
+
+        if n_channels == 128:
+            for ch in ch_idx:
+                ch_interval = check_data[ch+1] * 1000
+                check_data[ch] = ch_interval
+            return check_data
+        else:
+            invalid_data = np.zeros((128, check_data.shape[1]))
+            count = 0
+            for ch in range(n_channels):
+                if ch in ch_idx:
+                    continue
+                else:
+                    invalid_data[count,:] = check_data[ch]
+                count += 1
+
+            for ch in ch_idx:
+                ch_interval = check_data[ch+1] * 1000
+                invalid_data[ch] = ch_interval
+
+            return invalid_data
+
     def __parse_wl(self, wl_file):
         """解析 .对照组wl 格式文件"""
         data, data_present = load_file(wl_file)
+        repaired_data = self.check_data(data,[4,5,6,8,9,10,11,12])
         datasets = {}
 
-        datasets['data'] = data['amplifier_data']
+        datasets['data'] = repaired_data
         datasets['impedence'] = self.impedence / 1000.0
         datasets['fs'] = data['frequency_parameters']['amplifier_sample_rate']
         datasets['mapping'] = self.mapping
