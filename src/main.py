@@ -70,7 +70,7 @@ if __name__ == '__main__':
     from pipeline import batch_evaluate_dataset
 
     RAW_DATA_DIR = '../data/raw/'
-    compare_data_dirs = [data_dir for data_dir in os.listdir(RAW_DATA_DIR) if data_dir.__contains__("对照") and not data_dir.__contains__("大白")][7:8]
+    compare_data_dirs = [data_dir for data_dir in os.listdir(RAW_DATA_DIR) if data_dir.__contains__("对照") and not data_dir.__contains__("大白")][0:1]
     # experiment_data_dirs = [data_dir for data_dir in os.listdir(RAW_DATA_DIR) if data_dir.__contains__("实验")and not data_dir.__contains__("大白")][0:1]
 
     batch_evaluate_dataset(RAW_DATA_DIR,compare_data_dirs)

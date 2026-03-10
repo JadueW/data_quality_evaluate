@@ -354,14 +354,15 @@ class DataParse(FileProcess):
                     batch_data_list = list(executor.map(self._parse_file, batch_files))
 
             merged_batch = {}
-            batch_datas = [d['data'] for d in batch_data_list]
-            merged_batch['data'] = np.concatenate(batch_datas, axis=1)
+            target_key = 'amplifier_data'
 
+            arrays_to_merge = [np.atleast_2d(d['data'][target_key]) for d in batch_data_list]
+            merged_batch['data'] = np.concatenate(arrays_to_merge, axis=1)
             for key in batch_data_list[0].keys():
                 if key != 'data':
                     merged_batch[key] = batch_data_list[0][key]
 
-            print(f"当前批次数据量{len(batch_data_list)}")
+            print(f"Batch loaded: {len(batch_data_list)} files merged. Shape: {merged_batch['data'].shape}")
             yield merged_batch
 
             batch_start = batch_end
