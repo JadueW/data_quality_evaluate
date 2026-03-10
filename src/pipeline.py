@@ -122,7 +122,8 @@ def batch_evaluate_dataset(RAW_DATA_DIR,data_dirs):
             impedence = datasets['impedence']
 
             preprocessed_data_dict = handle_statistics(datasets)
-            timepoints = preprocessed_data_dict[0][0]['processed_data'].shape[1]
+            if timepoints == 0:
+                timepoints = preprocessed_data_dict[0][0]['processed_data'].shape[1]
 
             for win_id, win_value in preprocessed_data_dict.items():
                 statistics = Statistics(win_value)
