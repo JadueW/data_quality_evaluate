@@ -155,7 +155,7 @@ def batch_evaluate_dataset(RAW_DATA_DIR,data_dirs):
         print("阶段3：生成 report_data")
 
         erf = ExtractReportFeatures(all_group_statistics_data, timepoints, fs, impedence)
-        all_report_data, all_group_ch_win_means, all_group_ch_win_stds = erf.generate_report_statistics()
+        all_report_data, all_group_ch_win_means, all_group_ch_win_stds, valid_group_ch_win_means,valid_group_ch_win_stds = erf.generate_report_statistics()
 
         print("阶段3完成：指标计算完成")
 
