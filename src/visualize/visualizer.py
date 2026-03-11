@@ -142,17 +142,17 @@ class Visualizer:
         return fig
 
     @classmethod
-    def plot_electrode_topology_mask(cls,all_ch_check_mask,ch_spacing=1.0, figsize=(6, 8),**kwargs):
+    def plot_electrode_topology_mask(cls,elec_topo,ch_spacing=1.0, figsize=(6, 8),**kwargs):
         """
         绘制电极拓扑图，根据 all_ch_check_mask 显示通道状态 以及判断 grid_shape
-        :param all_ch_check_mask: 通道状态列表，True=好通道(绿色)，False=坏通道(灰色)
+        :param elec_topo: 用来辅助是否为有效通道
         :param group_id: 判断数据来源哪个group
         :param ch_spacing: 电极间距
         :param figsize:图像大小
         :return:
         """
 
-        n_channels = len(all_ch_check_mask)
+        n_channels = len(elec_topo)
         if n_channels == 128:
             grid_shape = (16,8)
         else:
@@ -175,7 +175,7 @@ class Visualizer:
             x = col * ch_spacing
             y = (n_rows - 1 - row) * ch_spacing
 
-            is_good = all_ch_check_mask[ch_idx]
+            is_good = elec_topo[ch_idx]
             face_color = color_good if is_good else color_bad
 
             # 绘制圆形电极
