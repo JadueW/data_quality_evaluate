@@ -244,13 +244,30 @@ class DataParse(FileProcess):
 
             return invalid_data
 
+    def check_data2(self,data):
+        """针对大白的数据修复"""
+        channels = 128
+        check_data = data
+        n_channels = check_data.shape[0]
+        repaired_data = np.zeros((128, check_data.shape[1]))
+        if n_channels > 128:
+            for ch in range(channels):
+                repaired_data[ch,:] = check_data[ch,:] * 10e6
+        else:
+            for ch in range(n_channels):
+                repaired_data[ch,:] = check_data[ch,:] * 10e6
+            for ch in range(n_channels,channels):
+                repaired_data[ch,:] = np.random.randint(low=-6000,high=6000,size=check_data.shape[1])
+
+        return repaired_data
+
     def __parse_wl(self, wl_file):
         """解析 .对照组wl 格式文件"""
         data, data_present = load_file(wl_file)
-        # repaired_data = self.check_data(data,[4,5,6,8,9,10,11,12])
+        # repaired_data = self.check_data2(data)
         datasets = {}
 
-        datasets['data'] = data
+        datasets['data'] = data['amplifier_data']
         datasets['impedence'] = self.impedence / 1000.0
         datasets['fs'] = data['frequency_parameters']['amplifier_sample_rate']
         datasets['mapping'] = self.mapping
@@ -264,9 +281,11 @@ class DataParse(FileProcess):
     def __parse_edf(self, edf_file):
         """解析 .edf 格式文件"""
         raw_edf = mne.io.read_raw_edf(edf_file, preload=True, verbose=False)
+        data = raw_edf.get_data()
+        repaired_data = self.check_data2(data)
 
         datasets = {}
-        datasets['data'] = raw_edf.get_data()
+        datasets['data'] = repaired_data
         datasets['impedence'] = self.impedence
         datasets['fs'] = raw_edf.info['sfreq']
         datasets['mapping'] = self.mapping
@@ -368,49 +387,77 @@ class DataParse(FileProcess):
             batch_start = batch_end
 
     def _load_chunked(self, is_parallel, max_workers):
-        """
-        分块加载：单文件数据大
-        策略：阈值为磁盘容量的10%。根据文件大小 / (磁盘容量 * 0.1) 计算分块数
-        """
         hardware = self.get_profile()
-        threshold_gb = hardware['disk_free_gb'] * 0.1  # 磁盘容量的10%
+        safe_threshold_gb = hardware['available_gb'] * 0.2
 
-        file_sizes_gb = [self.get_size_single_file(f) / 1024 for f in self.files]
+        for file_path in self.files:
+            file_size_gb = self.get_size_single_file(file_path) / 1024
+            num_chunks = max(1, math.ceil(file_size_gb / safe_threshold_gb))
 
-        for file_idx, file_path in enumerate(self.files):
-            file_size_gb = file_sizes_gb[file_idx]
+            print(f"--- 正在处理: {os.path.basename(file_path)} ---")
+            print(f"大小: {file_size_gb:.2f}GB, 内存安全阈值: {safe_threshold_gb:.2f}GB, 分块数: {num_chunks}")
 
-            ratio = file_size_gb / threshold_gb
-            num_chunks = math.ceil(ratio)  # 向上取整
+            if file_path.endswith('.edf'):
+                raw_edf = mne.io.read_raw_edf(file_path, preload=False, verbose=False)  # 不预加载
+                n_samples = raw_edf.n_times
+                samples_per_chunk = n_samples // num_chunks
 
-            print(f"文件 {os.path.basename(file_path)}: {file_size_gb:.2f}GB, 分成 {num_chunks} 块")
+                for chunk_idx in range(num_chunks):
+                    start_idx = chunk_idx * samples_per_chunk
+                    end_idx = n_samples if chunk_idx == num_chunks - 1 else (chunk_idx + 1) * samples_per_chunk
 
-            full_data = self._parse_file(file_path)
+                    data_slice, _ = raw_edf[:, start_idx:end_idx]
+                    repaired_data = self.check_data2(data_slice)
 
-            data_array = full_data['data']
-            n_channels, n_samples = data_array.shape
+                    yield self._wrap_dataset(repaired_data, chunk_idx, num_chunks, start_idx, end_idx, n_samples)
 
-            # 计算每块应该有多少个样本
-            samples_per_chunk = n_samples // num_chunks
+                del raw_edf  #
 
-            for chunk_idx in range(num_chunks):
-                start_idx = chunk_idx * samples_per_chunk
-                if chunk_idx == num_chunks - 1:
-                    end_idx = n_samples
-                else:
-                    end_idx = (chunk_idx + 1) * samples_per_chunk
+            else:
+                full_data = self._parse_file(file_path)
+                data_array = full_data['data']
+                n_channels, n_samples = data_array.shape
+                samples_per_chunk = n_samples // num_chunks
 
-                chunk_data = full_data.copy()
-                chunk_data['data'] = data_array[:, start_idx:end_idx].copy()
-                chunk_data['chunk_info'] = {
-                    'chunk_idx': chunk_idx,
-                    'num_chunks': num_chunks,
-                    'start_sample': start_idx,
-                    'end_sample': end_idx,
-                    'total_samples': n_samples
-                }
+                for chunk_idx in range(num_chunks):
+                    start_idx = chunk_idx * samples_per_chunk
+                    end_idx = n_samples if chunk_idx == num_chunks - 1 else (chunk_idx + 1) * samples_per_chunk
 
-                yield chunk_data
+                    chunk_data_content = data_array[:, start_idx:end_idx].copy()
+
+                    chunk_package = full_data.copy()
+                    chunk_package['data'] = chunk_data_content
+                    chunk_package['chunk_info'] = {
+                        'chunk_idx': chunk_idx,
+                        'num_chunks': num_chunks,
+                        'start_sample': start_idx,
+                        'end_sample': end_idx,
+                        'total_samples': n_samples
+                    }
+                    yield chunk_package
+
+                del full_data
+                del data_array
+
+    def _wrap_dataset(self, data, c_idx, n_chunks, start, end, total):
+        """辅助方法：统一包装输出格式"""
+        return {
+            'data': data,
+            'impedence': self.impedence,
+            'fs': 2000,
+            'mapping': self.mapping,
+            'ele_type': self.elec_type,
+            'subject_id': self.subject_id,
+            'date': self.date,
+            'impedence_file': self.impedence_file,
+            'chunk_info': {
+                'chunk_idx': c_idx,
+                'num_chunks': n_chunks,
+                'start_sample': start,
+                'end_sample': end,
+                'total_samples': total
+            }
+        }
 
 
 if __name__ == '__main__':

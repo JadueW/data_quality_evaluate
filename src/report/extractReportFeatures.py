@@ -280,19 +280,22 @@ class ExtractReportFeatures:
                 all_means = []
                 for ch_means in means_array:
                     all_means.extend(ch_means)
-                means_array_flat = np.array(all_means)
 
-                report_data["mean"].update({
-                    "min": float(np.min(means_array_flat)),
-                    "max": float(np.max(means_array_flat)),
-                    "avg": float(np.mean(means_array_flat)),
-                    "median": float(np.median(means_array_flat)),
-                    "variability": float(np.std(means_array_flat)),
-                    "1%": float(np.percentile(means_array_flat, 1)),
-                    "5%": float(np.percentile(means_array_flat, 5)),
-                    "95%": float(np.percentile(means_array_flat, 95)),
-                    "99%": float(np.percentile(means_array_flat, 99))
-                })
+                # 检查展平后的数组是否为空
+                if len(all_means) > 0:
+                    means_array_flat = np.array(all_means)
+
+                    report_data["mean"].update({
+                        "min": float(np.min(means_array_flat)),
+                        "max": float(np.max(means_array_flat)),
+                        "avg": float(np.mean(means_array_flat)),
+                        "median": float(np.median(means_array_flat)),
+                        "variability": float(np.std(means_array_flat)),
+                        "1%": float(np.percentile(means_array_flat, 1)),
+                        "5%": float(np.percentile(means_array_flat, 5)),
+                        "95%": float(np.percentile(means_array_flat, 95)),
+                        "99%": float(np.percentile(means_array_flat, 99))
+                    })
 
             stds_array = valid_group_ch_win_stds.get(group_id, [])
 
@@ -301,19 +304,22 @@ class ExtractReportFeatures:
                 all_stds = []
                 for ch_stds in stds_array:
                     all_stds.extend(ch_stds)
-                stds_array_flat = np.array(all_stds)
 
-                report_data["std"].update({
-                    "min": float(np.min(stds_array_flat)),
-                    "max": float(np.max(stds_array_flat)),
-                    "avg": float(np.mean(stds_array_flat)),
-                    "median": float(np.median(stds_array_flat)),
-                    "variability": float(np.std(stds_array_flat)),
-                    "1%": float(np.percentile(stds_array_flat, 1)),
-                    "5%": float(np.percentile(stds_array_flat, 5)),
-                    "95%": float(np.percentile(stds_array_flat, 95)),
-                    "99%": float(np.percentile(stds_array_flat, 99))
-                })
+                # 检查展平后的数组是否为空
+                if len(all_stds) > 0:
+                    stds_array_flat = np.array(all_stds)
+
+                    report_data["std"].update({
+                        "min": float(np.min(stds_array_flat)),
+                        "max": float(np.max(stds_array_flat)),
+                        "avg": float(np.mean(stds_array_flat)),
+                        "median": float(np.median(stds_array_flat)),
+                        "variability": float(np.std(stds_array_flat)),
+                        "1%": float(np.percentile(stds_array_flat, 1)),
+                        "5%": float(np.percentile(stds_array_flat, 5)),
+                        "95%": float(np.percentile(stds_array_flat, 95)),
+                        "99%": float(np.percentile(stds_array_flat, 99))
+                    })
 
 
             report_data["ch_win_means"] = \
@@ -324,7 +330,7 @@ class ExtractReportFeatures:
 
             all_report_data[group_id] = report_data
 
-        return all_report_data, all_group_ch_win_means, all_group_ch_win_stds
+        return all_report_data, all_group_ch_win_means, all_group_ch_win_stds,valid_group_ch_win_means,valid_group_ch_win_stds
 
     def compute_ch_win_mean(self):
         """
